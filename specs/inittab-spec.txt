@@ -1,0 +1,78 @@
+Init, as the process that sets userspace up, needs to know which process
+are necessary as well as any dependence amog them, so that if process B
+must be started after process A, init has a way to ensure that.
+
+A common way to achieve this feature is having init read a file that
+specifies process to be started and some metadata about them, allowing
+start order to be respected.
+
+This specification denotes an inittab file that should be simple to
+write and parse, yet have all metadata deemed necessary to fulfill init
+features.
+
+Init inittab file can have multiple one-line entries on the form:
+
+<order>:<core-id>:<type>:<process>
+
+<order> Unsigned number defining a relative order in which process will
+be run. For instance, STL could be ‘0’, so it would be the first process
+run. Two process with the same order are started in the order they
+appear on file, from top to bottom. A process on a next order is only
+started after all process on preceding order are terminated, unless they
+are of type ‘service’ - if only process of type ‘service’ are left on
+current order, init moves to next order. Can only be blank for
+‘safe-mode’ <type>.
+
+<core-id> CPU core-id number to which the process is bound. If left
+blank, no CPU binding is done. A very important note: there’s only one
+‘trusted’ way to prevent any other process from running on a core:
+remove that core from kernel scheduler using ‘isolcpus’ kernel command
+line parameter. So, init needs an AoU that integrator will properly
+use this kernel command line parameter. Without it, init can set process
+X affinity to core 2, but can’t prevent process Y from running on core 2
+as well, for instance.
+
+<type> Types of process. Can be <one-shot>, <service>, <safe-one-shot>,
+<safe-service>, <safe-mode>, <shutdown> or <safe-shutdown>. Init only
+starts process on a greater order iff all <one-shot> and <safe-one-shot>
+are terminated on current order. <safe-mode> is the application that
+will be started by init to bring system to safe state. This should
+happen only if a <safe-one-shot>, <safe-service> or <safe-shutdown> are
+abnormally terminated (crash). Note that this process ‘order’ is ignored
+- so it can be left blank. Only one <safe-mode> entry is allowed on
+inittab.
+Types <shutdown> and <safe-shutdown> are like their ‘one-shot’
+counterparts, but are run during system shutdown.  Order is still
+respected, so two process with different order numbers will be started
+from the one with smaller order to the next.
+
+<process> Process that will be started with all command line options.
+For <safe-service> process, command line options may contain tags <proc>
+and <exitcode>, that will be substituted for process name (with command
+line options) and exit code by init. Note that parsing command
+line is hard, so a good way to start would simply issue command content
+to bash, for instance.
+
+Example:
+0::<safe-one-shot>:/usr/bin/stl
+1:0:<safe-service>:/usr/bin/safe-service1
+1:1:<safe-service>:/usr/bin/safe-service2 --production
+::<safe-mode>:/usr/bin/safe-mode -p <proc> -c <exitcode>
+0::<safe-shutdown>:/usr/bin/stl --keyoff
+
+In this sample, if ‘safe-service2’ application crashes with segmentation
+fault, ‘safe-mode’ application will be called with:
+
+/usr/bin/safe-mode -p “/usr/bin/safe-service2 --production” -c 11
+
+Lines starting with # character are considered comment lines, so they
+are ignored. Note that it's not possible to comment a line after its
+end, so that follwing example is not a comment:
+
+0::<safe-one-shot>:/usr/bin/stl #Not a comment
+
+Init will simply issue "#Not a comment" as parameters to
+`/usr/bin/stl`.
+
+On inittab, lines cannot be arbitrarily long: no line, be it an entry or
+a commentary, can have more than 4095 characters.
