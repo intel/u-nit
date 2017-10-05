@@ -2,6 +2,8 @@ CC ?= gcc
 CFLAGS += -std=c99
 LDFLAGS +=
 
+TESTS_CFLAGS += $(CFLAGS) "-Isrc/"
+
 ifeq ($(DEBUG),1)
 	CFLAGS += -g -O0
 endif
@@ -23,4 +25,11 @@ init: $(OBJS)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm -rf init $(OBJS)
+	rm -rf init $(OBJS) $(TESTS)
+
+TESTS = parser_test
+
+parser_test: src/parser.o tests/parser_test.c
+	$(CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
+
+tests: $(TESTS)

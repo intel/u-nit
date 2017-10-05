@@ -1,0 +1,7 @@
+1:2:<one-shot>:/usr/bin/foo --bar baz
+2:0:<safe-one-shot>:/usr/bin/bar --baz foo
+1::<service>:/usr/bin/foo --baz bar
+::<safe-mode>:/usr/bin/bar --foo baz
+1:2:<shutdown>:/usr/bin/baz --foo baz
+0:1:<safe-shutdown>:/usr/bin/baz --bar foo
+0:0:<safe-mode>:/usr/bin/safe --wut wat
