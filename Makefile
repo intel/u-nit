@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS += -std=c99
+CFLAGS += -std=c99 -D_DEFAULT_SOURCE
 LDFLAGS +=
 
 TESTS_CFLAGS += $(CFLAGS) "-Isrc/"
@@ -14,7 +14,8 @@ ALL: init
 
 SOURCE = \
 	src/main.c \
-	src/parser.c
+	src/parser.c \
+	src/mainloop.c
 
 OBJS = $(SOURCE:.c=.o)
 
