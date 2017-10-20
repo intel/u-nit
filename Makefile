@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS += -std=c99 -D_DEFAULT_SOURCE
+CFLAGS += -std=c99 -Wall -D_DEFAULT_SOURCE
 LDFLAGS +=
 
 TESTS_CFLAGS += $(CFLAGS) "-Isrc/"
