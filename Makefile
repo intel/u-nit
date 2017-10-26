@@ -13,9 +13,10 @@ endif
 ALL: init
 
 SOURCE = \
+	src/log.c \
 	src/main.c \
-	src/parser.c \
-	src/mainloop.c
+	src/mainloop.c \
+	src/parser.c
 
 OBJS = $(SOURCE:.c=.o)
 

@@ -11,6 +11,7 @@
 #include <sys/signalfd.h>
 #include <unistd.h>
 
+#include "log.h"
 #include "mainloop.h"
 #include "parser.h"
 
@@ -63,7 +64,7 @@ static struct mainloop_timeout *one_shot_timeout;
 static void
 usage(const char *invocation_name)
 {
-    printf("Usage: \n"
+    log_message("Usage: \n"
             " %s <inittab-file>\n"
             "\n"
             "System and service manager [early development]\n",
@@ -112,24 +113,24 @@ debug_entries_lists(void)
 {
     struct inittab_entry_list *entry;
 
-    printf("STARTUP LIST:\n");
+    log_message("STARTUP LIST:\n");
     entry = startup_entries;
     while (entry != NULL) {
-        printf("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
+        log_message("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
                 entry->entry.order, entry->entry.core_id, entry->entry.type, entry->entry.process_name);
         entry = entry->next;
     }
 
-    printf("SHUTDOWN LIST:\n");
+    log_message("SHUTDOWN LIST:\n");
     entry = shutdown_entries;
     while (entry != NULL) {
-        printf("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
+        log_message("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
                 entry->entry.order, entry->entry.core_id, entry->entry.type, entry->entry.process_name);
         entry = entry->next;
     }
 
-    printf("SAFE MODE:\n");
-    printf("\t[Entry] order: %d, core_id: %d, type: %d, entry: '%s'\n",
+    log_message("SAFE MODE:\n");
+    log_message("\t[Entry] order: %d, core_id: %d, type: %d, entry: '%s'\n",
             safe_mode_entry.order, safe_mode_entry.core_id,
             safe_mode_entry.type, safe_mode_entry.process_name);
 }
@@ -210,9 +211,9 @@ handle_entry(struct inittab_entry *entry)
             break;
         }
         case SAFE_MODE: {
-            printf(">>>>> [%s]\n", safe_mode_entry.process_name);
+            log_message(">>>>> [%s]\n", safe_mode_entry.process_name);
             if (safe_mode_entry.process_name[0] != '\0') {
-                printf("Safe process already defined before '%.20s'(...)\n", entry->process_name);
+                log_message("Safe process already defined before '%.20s'(...)\n", entry->process_name);
                 result = false;
                 break;
             }
@@ -276,7 +277,7 @@ spawn_exec(const char *command, const char *console)
 
     p = fork();
 
-    printf("fork result for '%s': %d\n", command, p);
+    log_message("fork result for '%s': %d\n", command, p);
     /* the caller is reponsible to check the error */
     if (p != 0) {
         /* Restore the signals */
@@ -311,7 +312,7 @@ static enum timeout_result
 one_shot_timeout_cb(void)
 {
     if (remaining.pending_finish > 0U) {
-        printf("Some process are taking longer than expected to complete\n");
+        log_message("Some process are taking longer than expected to complete\n");
         /* TODO what to do? */
     }
 
@@ -337,7 +338,6 @@ start_processes(struct inittab_entry_list *list)
             /* First, let's see if we have memory for anciliary struct */
             p = calloc(1, sizeof(struct process));
             if (p == NULL) {
-                perror("");
                 result = false;
                 break;
             }
@@ -354,7 +354,7 @@ start_processes(struct inittab_entry_list *list)
                 p->next = running_processes;
                 running_processes = p;
             } else {
-                printf("Could not start process!\n");
+                log_message("Could not start process!\n");
                 free(p);
                 /* TODO what to do? if a safe one fails, maybe safe state?*/
             }
@@ -370,7 +370,7 @@ start_processes(struct inittab_entry_list *list)
         if (one_shot_timeout == NULL) {
             /* TODO We couldn't add a timeout to watch over one_shot process
              * startup time. How bad is that? */
-            printf("Init won't be able to watch one-shot process startup time\n");
+            log_message("Init won't be able to watch one-shot process startup time\n");
         }
     }
 
@@ -390,18 +390,18 @@ read_inittab(const char *filename)
     errno = 0;
     fp = fopen(filename, "re");
     if (fp == NULL) {
-        perror("Couldn't open inittab file");
+        log_message("Couldn't open inittab file: %m\n");
         result = false;
         goto end;
     }
 
-    printf("Reading inittab entries...\n");
+    log_message("Reading inittab entries...\n");
     while (true) {
         bool exit_loop = false;
 
         r = inittab_parse_entry(fp, &entry);
         if (r == RESULT_OK) {
-            printf("[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
+            log_message("[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
                     entry.order, entry.core_id, entry.type, entry.process_name);
 
             if (!handle_entry(&entry)) {
@@ -423,13 +423,13 @@ read_inittab(const char *filename)
     }
 
     if (safe_mode_entry.process_name[0] == '\0') {
-        printf("No <safe-mode> entry on inittab. Can't go on!\n");
+        log_message("No <safe-mode> entry on inittab. Can't go on!\n");
         error = true;
         /* TODO is this the right approach? */
     }
 
     if (error) {
-        printf("Error(s) during inittab parsing. Exiting!\n");
+        log_message("Error(s) during inittab parsing. Exiting!\n");
         result = false;
         free_entries_lists();
 
@@ -439,7 +439,7 @@ read_inittab(const char *filename)
 cleanup:
     errno = 0;
     if (fclose(fp) != 0) {
-        perror("Error closing inittab file");
+        log_message("Error closing inittab file: %m\n");
     }
 
 end:
@@ -519,9 +519,9 @@ kill_timeout_cb(void)
     if (current_stage == STAGE_TERMINATION) {
         struct process *p = running_processes;
 
-        printf("Sending KILL signal to processes that refused to term in timeout\n");
+        log_message("Sending KILL signal to processes that refused to term in timeout\n");
         while (p != NULL) {
-            printf("Sending KILL signal to %d (%s)\n", p->pid, p->config.process_name);
+            log_message("Sending KILL signal to %d (%s)\n", p->pid, p->config.process_name);
             kill(p->pid, SIGKILL);
             p = p->next;
         }
@@ -536,7 +536,7 @@ term_running_process(void)
 {
     struct process *p = running_processes;
     while (p != NULL) {
-        printf("Sending TERM signal to %d (%s)\n", p->pid, p->config.process_name);
+        log_message("Sending TERM signal to %d (%s)\n", p->pid, p->config.process_name);
         kill(p->pid, SIGTERM);
         p = p->next;
     }
@@ -568,7 +568,7 @@ handle_child_exit(struct signalfd_siginfo *info)
 
     if (p == NULL) {
         /* TODO what to do? */
-        printf("Couldn't find process %d\n", info->ssi_pid);
+        log_message("Couldn't find process %d\n", info->ssi_pid);
         return;
     }
 
@@ -585,12 +585,12 @@ handle_child_exit(struct signalfd_siginfo *info)
         /* TODO safe mode */
     }
 
-    printf("Was it called %d\n", p->config.type);
+    log_message("Was it called %d\n", p->config.type);
     /* One shot process terminated decrement counter to start remaining_processes*/
     if (is_one_shot_entry(&p->config)) {
         // TODO account only for child termination
         remaining.pending_finish--;
-        printf("Pending decreased to %d\n", remaining.pending_finish);
+        log_message("Pending decreased to %d\n", remaining.pending_finish);
     }
 
     /* Process exited, remove from our running process list */
@@ -600,7 +600,7 @@ handle_child_exit(struct signalfd_siginfo *info)
 static void
 signal_handler(struct signalfd_siginfo *info)
 {
-    printf("ssi_signo: %d - ssi_code: %d - ssi_pid: %d - ssi_status %d\n",
+    log_message("ssi_signo: %d - ssi_code: %d - ssi_pid: %d - ssi_status %d\n",
             info->ssi_signo, info->ssi_code, info->ssi_pid, info->ssi_status);
 
     switch (info->ssi_signo) {

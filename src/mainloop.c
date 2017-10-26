@@ -7,6 +7,7 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 
+#include "log.h"
 #include "mainloop.h"
 
 #define MAX_EVENTS 8
@@ -44,10 +45,10 @@ add_fd(int fd, struct callback_data *data)
     epev.events = EPOLLIN;
     epev.data.ptr = data;
 
-    printf("Adding %d to %d epoll\n", fd, epollfd);
+    log_message("Adding %d to %d epoll\n", fd, epollfd);
 
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &epev) < 0) {
-        perror("Error adding file descriptor to epoll");
+        log_message("Error adding file descriptor to epoll: %m\n");
         result = false;
     }
 
@@ -58,11 +59,11 @@ static void
 remove_fd(int fd)
 {
     if ((fd > -1) && (epollfd > -1)) {
-        printf("Removing %d from %d epoll\n", fd, epollfd);
+        log_message("Removing %d from %d epoll\n", fd, epollfd);
 
         errno = 0;
         if (epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, NULL) < 0) {
-            perror("Could not remove file descriptor from epoll");
+            log_message("Could not remove file descriptor from epoll: %m\n");
         }
     }
 }
@@ -77,7 +78,7 @@ mainloop_setup(void)
 
     epollfd = epoll_create1(EPOLL_CLOEXEC);
     if (epollfd == -1) {
-        perror("Error creating epoll fd");
+        log_message("Error creating epoll fd: %m\n");
         result = false;
     }
 
@@ -116,7 +117,7 @@ mainloop_start(void)
         }
 
         if (r < 0) {
-            perror("epoll_wait error");
+            log_message("epoll_wait error: %m\n");
             assert(false); /* Anything other than EINTR should not happen */
         }
 
@@ -131,7 +132,7 @@ mainloop_start(void)
 
                     s = read(cb_data->fd, &info, sizeof(struct signalfd_siginfo));
                     if (s != (ssize_t)sizeof(struct signalfd_siginfo)) {
-                        perror("A Error reading signal");
+                        log_message("A Error reading signal: %m\n");
                         goto error_reading;
                     }
                     ((struct mainloop_signal_handler*)cb_data)->callback(&info);
@@ -142,7 +143,7 @@ mainloop_start(void)
 
                     s = read(cb_data->fd, &u, sizeof(uint64_t));
                     if (s != (ssize_t)sizeof(uint64_t)) {
-                        perror("Error reading timeout");
+                        log_message("Error reading timeout: %m\n");
                         goto error_reading;
                     }
                     if (((struct mainloop_timeout *)cb_data)->callback() != TIMEOUT_CONTINUE) {
@@ -151,7 +152,7 @@ mainloop_start(void)
                     break;
                 }
                 default: {
-                    printf("Unexpected callback type %d\n", cb_data->type);
+                    log_message("Unexpected callback type %d\n", cb_data->type);
                     break;
                 }
             }
@@ -187,7 +188,7 @@ mainloop_add_timeout(uint32_t msec, enum timeout_result (*timeout_cb)(void))
     errno = 0;
     mt = calloc(1, sizeof(struct mainloop_timeout));
     if (mt == NULL) {
-        perror("Could not add timeout");
+        log_message("Could not add timeout: %m\n");
         goto alloc_error;
     }
 
@@ -196,7 +197,7 @@ mainloop_add_timeout(uint32_t msec, enum timeout_result (*timeout_cb)(void))
 
     timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
     if (timerfd < 0) {
-        perror("Could not add timeout");
+        log_message("Could not add timeout: %m\n");
         goto timerfd_error;
     }
     mt->cb_data.fd = timerfd;
@@ -248,6 +249,7 @@ mainloop_add_signal_handler(sigset_t *mask, void (*signal_cb)(struct signalfd_si
     msh = calloc(1, sizeof(struct mainloop_signal_handler));
     if (msh == NULL) {
         perror("Could not add signal handler");
+        log_message("Could not add signal handler: %m\n");
         goto alloc_error;
     }
 
@@ -256,7 +258,7 @@ mainloop_add_signal_handler(sigset_t *mask, void (*signal_cb)(struct signalfd_si
 
     sig_fd = signalfd(-1, mask, SFD_CLOEXEC | SFD_NONBLOCK);
     if (sig_fd < 0) {
-        perror("Could not add signal handler");
+        log_message("Could not add signal handler: %m\n");
         goto signalfd_error;
     }
     msh->cb_data.fd = sig_fd;

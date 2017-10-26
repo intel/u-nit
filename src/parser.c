@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "log.h"
+
 #define LINE_SIZE 4095
 #define BUFFER_LEN LINE_SIZE + 1
 
@@ -158,11 +160,11 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
     next = inittab_next_line(fp, buf);
 
     if (next == NEXT_LINE_TOO_BIG) {
-        printf("Line too big: '%.20s(...)'\n", buf);
+        log_message("Line too big: '%.20s(...)'\n", buf);
         result = RESULT_ERROR;
         goto end;
     } else if (next == NEXT_LINE_ERROR) {
-        printf("Couldn't read inittab file\n");
+        log_message("Couldn't read inittab file\n");
         result = RESULT_ERROR;
         goto end;
     } else if (next == NEXT_LINE_EOF){
@@ -180,17 +182,17 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
     if (tr == TOKEN_BLANK) {
         entry->order = -1;
     } else if (tr == TOKEN_ERROR) {
-        printf("Invalid 'order' field on inittab entry\n");
+        log_message("Invalid 'order' field on inittab entry\n");
         result = RESULT_ERROR;
         goto end;
     } else {
         if (!safe_strtoi32_t(order_str, &entry->order)) {
-            printf("Invalid 'order' field on inittab entry\n");
+            log_message("Invalid 'order' field on inittab entry\n");
             result = RESULT_ERROR;
             goto end;
         }
         if (entry->order < 0) {
-            printf("Invalid order 'field' on inittab entry\n");
+            log_message("Invalid order 'field' on inittab entry\n");
             result = RESULT_ERROR;
             goto end;
         }
@@ -201,17 +203,17 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
     if (tr == TOKEN_BLANK) {
         entry->core_id = -1;
     } else if (tr == TOKEN_ERROR) {
-        printf("Invalid 'core_id' field on inittab entry\n");
+        log_message("Invalid 'core_id' field on inittab entry\n");
         result = RESULT_ERROR;
         goto end;
     } else {
         if (!safe_strtoi32_t(core_id_str, &entry->core_id)) {
-            printf("Invalid 'core_id' field on inittab entry\n");
+            log_message("Invalid 'core_id' field on inittab entry\n");
             result = RESULT_ERROR;
             goto end;
         }
         if (entry->core_id < 0) {
-            printf("Invalid 'core_id' field on inittab entry\n");
+            log_message("Invalid 'core_id' field on inittab entry\n");
             result = RESULT_ERROR;
             goto end;
         }
@@ -220,7 +222,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
     /*Get <type> */
     tr = next_token(&lexer, &type_str, ':');
     if (tr != TOKEN_OK) {
-        printf("Expected 'type' field on inittab entry\n");
+        log_message("Expected 'type' field on inittab entry\n");
         result = RESULT_ERROR;
         goto end;
     } else {
@@ -239,7 +241,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
         } else if (strcmp(type_str, "<safe-mode>") == 0) {
             entry->type = SAFE_MODE;
         } else {
-            printf("Invalid 'type' field on inittab entry: %s\n", type_str);
+            log_message("Invalid 'type' field on inittab entry: %s\n", type_str);
             result = RESULT_ERROR;
             goto end;
         }
@@ -247,7 +249,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 
     /* Now that we know entry type, check if it has a valid order */
     if ((entry->order == -1) && (entry->type != SAFE_MODE)) {
-        printf("Expected 'order' field on entry with type different of '<safe-mode>'\n");
+        log_message("Expected 'order' field on entry with type different of '<safe-mode>'\n");
         result = RESULT_ERROR;
         goto end;
     }
@@ -255,13 +257,13 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
     /*Get <process> */
     tr = next_token(&lexer, &process_str, '\0');
     if (tr != TOKEN_OK) {
-        printf("Expected 'process' field on inittab entry\n");
+        log_message("Expected 'process' field on inittab entry\n");
         result = RESULT_ERROR;
         goto end;
     } else if (strlen(process_str) < sizeof(entry->process_name)){
         (void)strcpy(entry->process_name, process_str);
     } else {
-        printf("Invalid 'process' field on inittab entry\n");
+        log_message("Invalid 'process' field on inittab entry\n");
         result = RESULT_ERROR;
         goto end;
     }
