@@ -1,23 +1,29 @@
-#ifndef PARSER_HEADER_
-#define PARSER_HEADER_
+#ifndef INITTAB_HEADER_
+#define INITTAB_HEADER_
 
-#include <stdbool.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
 
 enum inittab_entry_type {ONE_SHOT, SAFE_ONE_SHOT, SERVICE, SAFE_SERVICE,
     SHUTDOWN, SAFE_SHUTDOWN, SAFE_MODE};
-enum inittab_parse_result {RESULT_OK, RESULT_ERROR, RESULT_DONE};
 
 struct inittab_entry {
+    struct inittab_entry *next;
     char process_name[4096];
     int32_t order;
     int32_t core_id;
     enum inittab_entry_type type;
 };
 
-enum inittab_parse_result
-inittab_parse_entry(FILE *fp, struct inittab_entry *entry);
+struct inittab {
+    struct inittab_entry *startup_list;
+    struct inittab_entry *shutdown_list;
+    struct inittab_entry *safe_mode_entry;
+};
+
+bool read_inittab(const char *filename, struct inittab *inittab_entries);
+void free_inittab_entry_list(struct inittab_entry *list);
 
 static inline bool
 is_safe_entry(const struct inittab_entry *entry)
@@ -64,4 +70,5 @@ is_one_shot_entry(const struct inittab_entry *entry)
         (entry->type == SHUTDOWN) ||
         (entry->type == SAFE_SHUTDOWN);
 }
+
 #endif

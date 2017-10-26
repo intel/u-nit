@@ -11,9 +11,9 @@
 #include <sys/signalfd.h>
 #include <unistd.h>
 
+#include "inittab.h"
 #include "log.h"
 #include "mainloop.h"
-#include "parser.h"
 
 #ifndef TIMEOUT_TERM
 #define TIMEOUT_TERM 3000
@@ -38,21 +38,14 @@ struct process {
     pid_t pid;
 };
 
-struct inittab_entry_list {
-    struct inittab_entry_list *next;
-    struct inittab_entry entry;
-};
-
 struct remaining_entries {
-    struct inittab_entry_list *remaining;
+    struct inittab_entry *remaining;
     uint32_t pending_finish;
 };
 
 static struct remaining_entries remaining;
 
-static struct inittab_entry safe_mode_entry;
-static struct inittab_entry_list *startup_entries;
-static struct inittab_entry_list *shutdown_entries;
+static struct inittab inittab_entries;
 
 static struct process *running_processes;
 
@@ -69,88 +62,6 @@ usage(const char *invocation_name)
             "\n"
             "System and service manager [early development]\n",
             invocation_name);
-}
-
-static bool
-add_entry_to_list(struct inittab_entry_list **list, struct inittab_entry *entry)
-{
-    struct inittab_entry_list *current;
-    struct inittab_entry_list *list_item;
-    bool result = true;
-
-    assert(list != NULL);
-    assert(entry != NULL);
-
-    list_item = calloc(1, sizeof(struct inittab_entry_list));
-    if (list_item == NULL) {
-        result = false;
-        goto end;
-    }
-
-    memcpy(&list_item->entry, entry, sizeof(struct inittab_entry));
-
-    /* Add item to list ensuring item->config.order is respected,
-     * and keeping list stable - or, if a new item with same order
-     * is added, it is kept after all previous items */
-    if ((*list == NULL) || ((*list)->entry.order > entry->order)) {
-        list_item->next = *list;
-        *list = list_item;
-    } else {
-        current = *list;
-        while ((current->next != NULL) && (current->next->entry.order <= entry->order)) {
-            current = current->next;
-        }
-        list_item->next = current->next;
-        current->next = list_item;
-    }
-
-end:
-    return result;
-}
-
-static void
-debug_entries_lists(void)
-{
-    struct inittab_entry_list *entry;
-
-    log_message("STARTUP LIST:\n");
-    entry = startup_entries;
-    while (entry != NULL) {
-        log_message("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
-                entry->entry.order, entry->entry.core_id, entry->entry.type, entry->entry.process_name);
-        entry = entry->next;
-    }
-
-    log_message("SHUTDOWN LIST:\n");
-    entry = shutdown_entries;
-    while (entry != NULL) {
-        log_message("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
-                entry->entry.order, entry->entry.core_id, entry->entry.type, entry->entry.process_name);
-        entry = entry->next;
-    }
-
-    log_message("SAFE MODE:\n");
-    log_message("\t[Entry] order: %d, core_id: %d, type: %d, entry: '%s'\n",
-            safe_mode_entry.order, safe_mode_entry.core_id,
-            safe_mode_entry.type, safe_mode_entry.process_name);
-}
-
-static void
-free_entries_lists(void)
-{
-    struct inittab_entry_list *tmp;
-
-    while (startup_entries != NULL) {
-        tmp = startup_entries;
-        startup_entries = startup_entries->next;
-        free(tmp);
-    }
-
-    while (shutdown_entries != NULL) {
-        tmp = shutdown_entries;
-        shutdown_entries = shutdown_entries->next;
-        free(tmp);
-    }
 }
 
 static void
@@ -188,45 +99,6 @@ free_process_list(struct process **list)
     while (*list != NULL) {
         remove_process(list, *list);
     }
-}
-
-static bool
-handle_entry(struct inittab_entry *entry)
-{
-    bool result = true;
-
-    assert(entry != NULL);
-
-    switch (entry->type) {
-        case ONE_SHOT:
-        case SAFE_ONE_SHOT:
-        case SERVICE:
-        case SAFE_SERVICE: {
-            add_entry_to_list(&startup_entries, entry);
-            break;
-        }
-        case SHUTDOWN:
-        case SAFE_SHUTDOWN: {
-            add_entry_to_list(&shutdown_entries, entry);
-            break;
-        }
-        case SAFE_MODE: {
-            log_message(">>>>> [%s]\n", safe_mode_entry.process_name);
-            if (safe_mode_entry.process_name[0] != '\0') {
-                log_message("Safe process already defined before '%.20s'(...)\n", entry->process_name);
-                result = false;
-                break;
-            }
-            memcpy(&safe_mode_entry, entry, sizeof(struct inittab_entry));
-            break;
-        }
-        default: {
-            /* Should never happen */
-            assert(false);
-        }
-    }
-
-    return result;
 }
 
 static int
@@ -321,18 +193,19 @@ one_shot_timeout_cb(void)
 }
 
 static bool
-start_processes(struct inittab_entry_list *list)
+start_processes(struct inittab_entry *list)
 {
     int32_t current_order;
     bool result = true;
 
     if (list != NULL) {
-        struct inittab_entry_list *list_item;
+        struct inittab_entry *entry;
 
         remaining.pending_finish = 0;
-        current_order = list->entry.order;
-        list_item = list;
-        while ((list_item != NULL) && (list_item->entry.order == current_order)) {
+        entry = list;
+        current_order = entry->order;
+
+        while ((entry != NULL) && (entry->order == current_order)) {
             struct process *p;
 
             /* First, let's see if we have memory for anciliary struct */
@@ -341,11 +214,11 @@ start_processes(struct inittab_entry_list *list)
                 result = false;
                 break;
             }
-            p->pid = spawn_exec(list_item->entry.process_name, "");
+            p->pid = spawn_exec(entry->process_name, "");
 
             if (p->pid > 0) {
                 /* Stores inittab entry information on process struct */
-                memcpy(&p->config, &(list_item->entry), sizeof(struct inittab_entry));
+                memcpy(&p->config, entry, sizeof(struct inittab_entry));
 
                 if (is_one_shot_entry(&p->config)) {
                     remaining.pending_finish++;
@@ -359,10 +232,10 @@ start_processes(struct inittab_entry_list *list)
                 /* TODO what to do? if a safe one fails, maybe safe state?*/
             }
 
-            list_item = list_item->next;
+            entry = entry->next;
         }
 
-        remaining.remaining = list_item;
+        remaining.remaining = entry;
     }
 
     if (result) {
@@ -374,75 +247,6 @@ start_processes(struct inittab_entry_list *list)
         }
     }
 
-    return result;
-}
-
-static bool
-read_inittab(const char *filename)
-{
-    FILE *fp = NULL;
-    struct inittab_entry entry = {0};
-    enum inittab_parse_result r;
-    bool error = false, result = true;
-
-    assert(filename != NULL);
-
-    errno = 0;
-    fp = fopen(filename, "re");
-    if (fp == NULL) {
-        log_message("Couldn't open inittab file: %m\n");
-        result = false;
-        goto end;
-    }
-
-    log_message("Reading inittab entries...\n");
-    while (true) {
-        bool exit_loop = false;
-
-        r = inittab_parse_entry(fp, &entry);
-        if (r == RESULT_OK) {
-            log_message("[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
-                    entry.order, entry.core_id, entry.type, entry.process_name);
-
-            if (!handle_entry(&entry)) {
-                error = true;
-                exit_loop = true;
-            }
-        } else if (r == RESULT_ERROR) {
-            error = true;
-            /* TODO currently, `inittab_parse_entry` itself prints error. Maybe it's
-             * better if it returned (via a pointer arg) information about the error,
-             * so caller print it */
-        } else {
-            exit_loop = true;
-        }
-
-        if (exit_loop) {
-            break;
-        }
-    }
-
-    if (safe_mode_entry.process_name[0] == '\0') {
-        log_message("No <safe-mode> entry on inittab. Can't go on!\n");
-        error = true;
-        /* TODO is this the right approach? */
-    }
-
-    if (error) {
-        log_message("Error(s) during inittab parsing. Exiting!\n");
-        result = false;
-        free_entries_lists();
-
-        goto cleanup;
-    }
-
-cleanup:
-    errno = 0;
-    if (fclose(fp) != 0) {
-        log_message("Error closing inittab file: %m\n");
-    }
-
-end:
     return result;
 }
 
@@ -479,7 +283,7 @@ stage_maintenance(void)
         /* If all process finished, time to start 'shutdown' ones */
         if (running_processes == NULL) {
             current_stage = STAGE_SHUTDOWN;
-            start_processes(shutdown_entries);
+            start_processes(inittab_entries.shutdown_list);
 
             /* Since all processes ended, no need for timer to kill them anymore */
             if (kill_timeout != NULL) {
@@ -630,12 +434,10 @@ main(int argc, char *argv[])
         goto end;
     }
 
-    if (!read_inittab(argv[1])) {
+    if (!read_inittab(argv[1], &inittab_entries)) {
         result = EXIT_FAILURE;
         goto end;
     }
-
-    debug_entries_lists();
 
     /* Block signals that should only be caught by epoll */
     setup_signals(&mask);
@@ -656,14 +458,17 @@ main(int argc, char *argv[])
 
     /* Start initial list of process */
     current_stage = STAGE_STARTUP;
-    start_processes(startup_entries);
+    start_processes(inittab_entries.startup_list);
 
     mainloop_start();
 
 end:
 
-    free_entries_lists();
     free_process_list(&running_processes);
+
+    free_inittab_entry_list(inittab_entries.startup_list);
+    free_inittab_entry_list(inittab_entries.shutdown_list);
+    free_inittab_entry_list(inittab_entries.safe_mode_entry);
 
     if (msh != NULL) {
         mainloop_remove_signal_handler(msh);
