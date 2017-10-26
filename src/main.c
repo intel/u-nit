@@ -1,19 +1,26 @@
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <sys/reboot.h>
+#include <sys/signalfd.h>
+#include <sys/stat.h>
+#include <sys/ttydefaults.h> /* CKILL, CINTR, CQUIT, ... */
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>
-#include <sys/ioctl.h>
-#include <sys/signalfd.h>
+#include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "inittab.h"
 #include "log.h"
 #include "mainloop.h"
+#include "mount.h"
 
 #ifndef TIMEOUT_TERM
 #define TIMEOUT_TERM 3000
@@ -21,6 +28,10 @@
 
 #ifndef TIMEOUT_ONE_SHOT
 #define TIMEOUT_ONE_SHOT 3000
+#endif
+
+#ifndef INITTAB_FILENAME
+#define INITTAB_FILENAME "/etc/inittab2"
 #endif
 
 enum stage {
@@ -54,15 +65,7 @@ static enum stage current_stage;
 static struct mainloop_timeout *kill_timeout;
 static struct mainloop_timeout *one_shot_timeout;
 
-static void
-usage(const char *invocation_name)
-{
-    log_message("Usage: \n"
-            " %s <inittab-file>\n"
-            "\n"
-            "System and service manager [early development]\n",
-            invocation_name);
-}
+static int shutdown_command = RB_AUTOBOOT; /* Is this a sensible default? */
 
 static void
 remove_process(struct process **list, struct process *p)
@@ -105,13 +108,13 @@ static int
 run_exec(const char *command)
 {
     /* should run the new process using a bash ? */
-//    int r;
+    int r;
 
     /* Give a controlle terminal for the process */
-//    r = ioctl(STDIN_FILENO, TIOCSCTTY, 1);
-//    if (r == -1) {
-//        return r;
-//    }
+    r = ioctl(STDIN_FILENO, TIOCSCTTY, 1);
+    if (r == -1) {
+        return r;
+    }
 
     /* Should configure ENV ? */
     return execl("/bin/sh", "/bin/sh", "-c", command, NULL);
@@ -123,8 +126,10 @@ setup_signals(sigset_t *mask)
     int i, r;
 
     int signals[] = {
-        SIGCHLD,
-        SIGINT
+        SIGCHLD,    /* To monitor started processes */
+        SIGTERM,    /* Reboot signal */
+        SIGUSR1,    /* Halt signal */
+        SIGUSR2     /* Shutdown signal */
     };
 
     r = sigemptyset(mask);
@@ -137,6 +142,136 @@ setup_signals(sigset_t *mask)
 
     r = sigprocmask(SIG_SETMASK, mask, NULL);
     assert(r == 0);
+}
+
+/* Try to open the /dev/console, the maximum attempts is 10 times with
+ * 100000 microseconds between each attempt
+ */
+static int
+open_console(const char *terminal, int mode)
+{
+    int times = 10;
+    int tty = -1;
+
+    for (; times > 0; times--) {
+        struct timespec pause = {};
+
+        errno = 0;
+        tty = open(terminal, mode);
+        if (tty >= 0) {
+            break;
+        }
+
+        if (errno != EIO) {
+            break;
+        }
+
+        /* Isn't this a really, really long time? */
+        pause.tv_nsec = 100 * 1000 * 1000; // 100 msecs
+        (void)nanosleep(&pause, NULL);
+    }
+
+    return tty;
+}
+
+static bool
+reset_console(int fd)
+{
+    int r;
+    struct termios tty;
+    bool result = false;
+
+    r = tcgetattr(fd, &tty);
+    if (r == -1) {
+        goto end;
+    }
+
+    /* TODO assess what is really relevant to our case */
+    tty.c_cflag &= CBAUD|CBAUDEX|CSIZE|CSTOPB|PARENB|PARODD;
+    tty.c_cflag |= HUPCL|CLOCAL|CREAD;
+    tty.c_iflag = IGNPAR|ICRNL|IXON|IXANY;
+    tty.c_oflag = OPOST|ONLCR;
+    tty.c_lflag = ISIG|ICANON|ECHO|ECHOCTL|ECHOPRT|ECHOKE;
+
+    tty.c_cc[VINTR]     = CINTR;            /* ^C */
+    tty.c_cc[VQUIT]     = CQUIT;            /* ^\ */
+    tty.c_cc[VERASE]    = CERASE;           /* ASCII DEL (0177) */
+    tty.c_cc[VKILL]     = CKILL;            /* ^X */
+    tty.c_cc[VEOF]      = CEOF;             /* ^D */
+    tty.c_cc[VTIME]     = 0;
+    tty.c_cc[VMIN]      = 1;
+    tty.c_cc[VSTART]    = CSTART;           /* ^Q */
+    tty.c_cc[VSTOP]     = CSTOP;            /* ^S */
+    tty.c_cc[VSUSP]     = CSUSP;            /* ^Z */
+    tty.c_cc[VEOL]      = _POSIX_VDISABLE;
+    tty.c_cc[VREPRINT]  = CREPRINT;         /* ^R */
+    tty.c_cc[VWERASE]   = CWERASE;          /* ^W */
+    tty.c_cc[VLNEXT]    = CLNEXT;           /* ^V */
+    tty.c_cc[VEOL2]     = _POSIX_VDISABLE;
+
+    /*
+     * Now set the terminal line.
+     * We don't care about non-transmitted output data
+     * and non-read input data.
+     */
+    r = tcsetattr(fd, TCSANOW, &tty);
+    if (r == -1) {
+        goto end;
+    }
+
+    r = tcflush(fd, TCIOFLUSH);
+    if (r == -1) {
+        goto end;
+    }
+
+    /* Everything went OK */
+    result = true;
+
+end:
+    return result;
+}
+
+static int
+setup_stty(const char *terminal)
+{
+    int r, tty;
+
+    tty = open_console(terminal, O_RDWR | O_NOCTTY | O_CLOEXEC);
+    if (tty == -1) {
+        goto err_open;
+    }
+
+    r = dup2(tty, STDIN_FILENO);
+    if (r == -1) {
+        goto err_dup_in;
+    }
+
+    r = dup2(tty, STDOUT_FILENO);
+    if (r == -1) {
+        goto err_dup_out;
+    }
+
+    r = dup2(tty, STDERR_FILENO);
+    if (r == -1) {
+        goto err_dup_errno;
+    }
+
+    if (!reset_console(tty)) {
+        goto err_console;
+    }
+
+    return tty;
+
+err_console:
+    (void)close(STDERR_FILENO);
+err_dup_errno:
+    (void)close(STDOUT_FILENO);
+err_dup_out:
+    (void)close(STDIN_FILENO);
+err_dup_in:
+    (void)close(tty);
+err_open:
+    return -1;
 }
 
 /* Expects SIGCHLD to be disabled when called */
@@ -152,13 +287,10 @@ spawn_exec(const char *command, const char *console)
     log_message("fork result for '%s': %d\n", command, p);
     /* the caller is reponsible to check the error */
     if (p != 0) {
-        /* Restore the signals */
-//        r = sigprocmask(SIG_SETMASK, &old_mask, NULL);
         return p;
     }
 
     /* child code */
-
     r = sigemptyset(&mask);
     assert(r == 0);
 
@@ -172,10 +304,9 @@ spawn_exec(const char *command, const char *console)
     }
 
     /* Configure terminal for child */
-//    r = setup_stty(console);
-//    if (r == -1) {
-//        return -1;
-//    }
+    if (setup_stty(console) < 0) {
+        return -1;
+    }
 
     return run_exec(command);
 }
@@ -214,7 +345,8 @@ start_processes(struct inittab_entry *list)
                 result = false;
                 break;
             }
-            p->pid = spawn_exec(entry->process_name, "");
+            /* Always /dev/console? Do we always need this? */
+            p->pid = spawn_exec(entry->process_name, "/dev/console");
 
             if (p->pid > 0) {
                 /* Stores inittab entry information on process struct */
@@ -350,8 +482,10 @@ term_running_process(void)
 }
 
 static void
-handle_sigint(struct signalfd_siginfo *info)
+handle_shutdown_cmd(struct signalfd_siginfo *info, int command)
 {
+    (void)info; /* Not used */
+
     /* Ensure 'remaining list' is cleaned up */
     remaining.remaining = NULL;
     remaining.pending_finish = 0;
@@ -360,6 +494,11 @@ handle_sigint(struct signalfd_siginfo *info)
     /* TODO is this right? */
     current_stage = STAGE_TERMINATION;
     term_running_process();
+
+    shutdown_command = command;
+
+    /* Stages will change again, let's keep track */
+    mainloop_set_post_iteration_callback(stage_maintenance);
 }
 
 static void
@@ -404,19 +543,89 @@ handle_child_exit(struct signalfd_siginfo *info)
 static void
 signal_handler(struct signalfd_siginfo *info)
 {
-    log_message("ssi_signo: %d - ssi_code: %d - ssi_pid: %d - ssi_status %d\n",
+    log_message("Received signal - si_signo: %d - ssi_code: %d - ssi_pid: %d - ssi_status %d\n",
             info->ssi_signo, info->ssi_code, info->ssi_pid, info->ssi_status);
 
     switch (info->ssi_signo) {
     case SIGCHLD:
         handle_child_exit(info);
         break;
-    case SIGINT:
-        handle_sigint(info);
+    case SIGTERM:
+        handle_shutdown_cmd(info, RB_AUTOBOOT);
+        break;
+    case SIGUSR1:
+        handle_shutdown_cmd(info, RB_HALT_SYSTEM);
+        break;
+    case SIGUSR2:
+        handle_shutdown_cmd(info, RB_POWER_OFF);
         break;
     default:
+        /* Nothing to do*/
         break;
     }
+}
+
+static bool
+do_reboot(int cmd)
+{
+    bool result = true;
+
+    /* Umount fs */
+    sync(); /* Ensure fs are synced */
+    mount_umount_filesystems();
+
+    if (reboot(cmd) < 0) {
+        log_message("Reboot command failed: %m\n");
+        result = false;
+    }
+
+    return result;
+}
+
+static bool
+disable_sysrq(void)
+{
+    FILE *f;
+    bool result = true;
+
+    errno = 0;
+    f = fopen("/proc/sys/kernel/sysrq", "r+e");
+    if (f == NULL) {
+        log_message("Could not open sysrq file: %m\n");
+        result = false;
+        goto end;
+    }
+
+    errno = 0;
+    if (fputc((int)'0', f) == EOF) {
+        log_message("Could not write to sysrq file: %m\n");
+        result = false;
+    }
+
+    (void)fclose(f);
+
+end:
+    return result;
+}
+
+static bool
+setup_console(void)
+{
+    int tty;
+    bool r = false;
+
+    /* Closing stdio descriptors */
+    close(STDIN_FILENO);
+    close(STDERR_FILENO);
+    close(STDOUT_FILENO);
+
+    tty = open_console("/dev/console", O_WRONLY | O_NOCTTY | O_CLOEXEC);
+    if (tty != -1) {
+        r = reset_console(tty);
+        close(tty); /* Why this close here?*/
+    }
+
+    return r;
 }
 
 int
@@ -424,17 +633,43 @@ main(int argc, char *argv[])
 {
     sigset_t mask;
     struct mainloop_signal_handler *msh = NULL;
-    int result = EXIT_SUCCESS;
+    int r, result = EXIT_SUCCESS;
+    pid_t p;
 
     current_stage = STAGE_SETUP;
 
-    /* TODO this arg stuff will change once init starts as PID 1 */
-    if (argc != 2) {
-        usage(argv[0]);
+    if (getpid() != 1) {
+        result = EXIT_FAILURE;
         goto end;
     }
 
-    if (!read_inittab(argv[1], &inittab_entries)) {
+    if (!read_inittab(INITTAB_FILENAME, &inittab_entries)) {
+        result = EXIT_FAILURE;
+        goto end;
+    }
+
+    (void)umask(0);
+
+    /* Ensure init will not block any umount call later */
+    r = chdir("/");
+    if (r == -1) {
+        result = EXIT_FAILURE;
+        goto end;
+    }
+
+    if (!setup_console()) {
+        result = EXIT_FAILURE;
+        goto end;
+    }
+
+    /* Become a session leader */
+    p = setsid();
+    if (p == -1) {
+        result = EXIT_FAILURE;
+        goto end;
+    }
+
+    if (!mount_mount_filesystems()) {
         result = EXIT_FAILURE;
         goto end;
     }
@@ -442,8 +677,21 @@ main(int argc, char *argv[])
     /* Block signals that should only be caught by epoll */
     setup_signals(&mask);
 
+    /* To catch Ctrl+alt+del. We will receive SIGINT on Ctrl+alt+del (which we ignore) */
+    r = reboot(RB_DISABLE_CAD);
+    if (r < 0) {
+        log_message("Could not disable Ctrl+Alt+Del: %m\n");
+        /* How big of a problem is this? Should we abort or life goes on? */
+    }
+
+    /* Disable sysrq */
+    if (!disable_sysrq()) {
+        log_message("Coud not disable Sysrq keys\n");
+    }
+
     /* Prepares mainloop to run */
     if (!mainloop_setup()) {
+        result = EXIT_FAILURE;
         goto end;
     }
 
@@ -453,6 +701,7 @@ main(int argc, char *argv[])
 
     msh = mainloop_add_signal_handler(&mask, signal_handler);
     if (msh == NULL) {
+        result = EXIT_FAILURE;
         goto end;
     }
 
@@ -461,6 +710,11 @@ main(int argc, char *argv[])
     start_processes(inittab_entries.startup_list);
 
     mainloop_start();
+
+    if (!do_reboot(shutdown_command)) {
+        result = EXIT_FAILURE;
+        goto end;
+    }
 
 end:
 

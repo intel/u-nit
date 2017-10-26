@@ -17,7 +17,8 @@ SOURCE = \
 	src/lexer.c \
 	src/log.c \
 	src/main.c \
-	src/mainloop.c
+	src/mainloop.c \
+	src/mount.c
 
 OBJS = $(SOURCE:.c=.o)
 
