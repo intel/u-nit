@@ -63,8 +63,8 @@ debug_inittab_entry_list(struct inittab_entry *list)
         struct inittab_entry *current = list;
 
         while (current != NULL) {
-            log_message("\t[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
-                    current->order, current->core_id, current->type, current->process_name);
+            log_message("\t[Entry] order: %d, core_id: %d, type: %d, controlling-terminal: '%s', process: '%s'\n",
+                    current->order, current->core_id, current->type, current->ctty_path, current->process_name);
             current = current->next;
         }
     }
@@ -143,7 +143,8 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
     enum next_line_result next;
     enum token_result tr;
 
-    char *order_str = NULL, *core_id_str = NULL, *type_str = NULL, *process_str = NULL;
+    char *order_str = NULL, *core_id_str = NULL, *type_str = NULL, *process_str = NULL,
+         *ctty_path_str = NULL;
 
     if ((fp == NULL) || (feof(fp) != 0)) {
         result = RESULT_ERROR;
@@ -247,6 +248,18 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
         goto end;
     }
 
+    /* Get <controlling-terminal> */
+    tr = next_token(&lexer, &ctty_path_str, ':');
+    if ((tr == TOKEN_OK) && strlen(ctty_path_str) < sizeof(entry->ctty_path)) {
+        (void)strcpy(entry->ctty_path, ctty_path_str);
+    } else if (tr == TOKEN_BLANK) {
+        entry->ctty_path[0] = '\0';
+    } else {
+        log_message("Invalid 'controlling-terminal' field on inittab entry\n");
+        result = RESULT_ERROR;
+        goto end;
+    }
+
     /*Get <process> */
     tr = next_token(&lexer, &process_str, '\0');
     if (tr != TOKEN_OK) {
@@ -297,8 +310,8 @@ read_inittab(const char *filename, struct inittab *inittab_entries)
 
         r = inittab_parse_entry(fp, entry);
         if (r == RESULT_OK) {
-            log_message("[Entry] order: %d, core_id: %d, type: %d, process: '%s'\n",
-                    entry->order, entry->core_id, entry->type, entry->process_name);
+            log_message("[Entry] order: %d, core_id: %d, type: %d, controlling-terminal: '%s', process: '%s'\n",
+                    entry->order, entry->core_id, entry->type, entry->ctty_path, entry->process_name);
 
             if (!place_entry(entry, inittab_entries)) {
                 free(entry);

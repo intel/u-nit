@@ -109,14 +109,6 @@ static int
 run_exec(const char *command)
 {
     /* should run the new process using a bash ? */
-    int r;
-
-    /* Give a controlle terminal for the process */
-    r = ioctl(STDIN_FILENO, TIOCSCTTY, 1);
-    if (r == -1) {
-        return r;
-    }
-
     /* Should configure ENV ? */
     return execl("/bin/sh", "/bin/sh", "-c", command, NULL);
 }
@@ -275,6 +267,56 @@ err_open:
     return -1;
 }
 
+static bool
+setup_stdio(void)
+{
+    int null_fd, out_fd;
+
+    errno = 0;
+    null_fd = open("/dev/null", O_RDONLY | O_NOCTTY);
+    if (null_fd == -1) {
+        log_message("Could not open /dev/null: %m\n");
+        goto err_open_null;
+    }
+
+    if (dup2(null_fd, STDIN_FILENO) == -1) {
+        log_message("Could not dup null fd: %m\n");
+        goto err_dup_null;
+    }
+
+    out_fd = open(LOG_FILE, O_WRONLY);
+    if (out_fd == -1) {
+        log_message("Could not open logfile: %m\n");
+        goto err_open_out;
+    }
+
+    if (dup2(out_fd, STDOUT_FILENO) == -1) {
+        log_message("Could not dup out fd: %m\n");
+        goto err_dup_out;
+    }
+
+    if (dup2(out_fd, STDERR_FILENO) == -1) {
+        log_message("Could not dup err fd: %m\n");
+        goto err_dup_err;
+    }
+
+    close(out_fd);
+    close(null_fd);
+
+    return true;
+
+err_dup_err:
+    close(STDERR_FILENO);
+err_dup_out:
+    close(out_fd);
+err_open_out:
+    close(STDIN_FILENO);
+err_dup_null:
+    close(null_fd);
+err_open_null:
+    return false;
+}
+
 /* Expects SIGCHLD to be disabled when called */
 static pid_t
 spawn_exec(const char *command, const char *console)
@@ -305,8 +347,20 @@ spawn_exec(const char *command, const char *console)
     }
 
     /* Configure terminal for child */
-    if (setup_stty(console) < 0) {
-        return -1;
+    if (console[0] != '\0') {
+        if (setup_stty(console) < 0) {
+            return -1;
+        }
+
+        /* Give a controlle terminal for the process */
+        r = ioctl(STDIN_FILENO, TIOCSCTTY, 1);
+        if (r == -1) {
+            return r;
+        }
+    } else {
+        if (!setup_stdio()) {
+            return -1;
+        }
     }
 
     return run_exec(command);
@@ -346,8 +400,7 @@ start_processes(struct inittab_entry *list)
                 result = false;
                 break;
             }
-            /* Always /dev/console? Do we always need this? */
-            p->pid = spawn_exec(entry->process_name, "/dev/console");
+            p->pid = spawn_exec(entry->process_name, entry->ctty_path);
 
             if (p->pid > 0) {
                 /* Stores inittab entry information on process struct */

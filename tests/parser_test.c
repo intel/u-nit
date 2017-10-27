@@ -23,6 +23,7 @@ static struct test_data parse_assorted_errors = {
             .result = RESULT_OK,
             .entry = {
                 .process_name = "/usr/bin/foo --bar baz",
+                .ctty_path = "/dev/tty1",
                 .type = ONE_SHOT,
                 .order = 1,
                 .core_id = 2
@@ -32,6 +33,7 @@ static struct test_data parse_assorted_errors = {
             .result = RESULT_OK,
             .entry = {
                 .process_name = "/usr/bin/bar --baz foo",
+                .ctty_path = "/dev/console",
                 .type = SAFE_ONE_SHOT,
                 .order = 4,
                 .core_id = 0
@@ -83,6 +85,10 @@ static struct test_data parse_assorted_errors = {
             .entry = { }
         },
         {
+            .result = RESULT_ERROR,
+            .entry = { }
+        },
+        {
             .result = RESULT_DONE,
             .entry = { }
         },
@@ -97,6 +103,7 @@ static struct test_data parse_ok = {
             .result = RESULT_OK,
             .entry = {
                 .process_name = "/usr/bin/foo --bar baz",
+                .ctty_path = "",
                 .type = ONE_SHOT,
                 .order = 1,
                 .core_id = 2
@@ -106,6 +113,7 @@ static struct test_data parse_ok = {
             .result = RESULT_OK,
             .entry = {
                 .process_name = "/usr/bin/bar --baz foo",
+                .ctty_path = "/dev/console",
                 .type = SAFE_ONE_SHOT,
                 .order = 2,
                 .core_id = 0
@@ -263,6 +271,7 @@ static bool
 entry_equal(struct inittab_entry *a, struct inittab_entry *b)
 {
     return (strncmp(a->process_name, b->process_name, sizeof(a->process_name)) == 0)
+        && (strncmp(a->ctty_path, b->ctty_path, sizeof(a->ctty_path)) == 0)
         && (a->type == b->type)
         && (a->order == b->order)
         && (a->core_id == b->core_id);

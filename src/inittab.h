@@ -11,6 +11,7 @@ enum inittab_entry_type {ONE_SHOT, SAFE_ONE_SHOT, SERVICE, SAFE_SERVICE,
 struct inittab_entry {
     struct inittab_entry *next;
     char process_name[4096];
+    char ctty_path[256];
     int32_t order;
     int32_t core_id;
     enum inittab_entry_type type;

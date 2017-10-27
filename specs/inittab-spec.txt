@@ -12,7 +12,7 @@ features.
 
 Init inittab file can have multiple one-line entries on the form:
 
-<order>:<core-id>:<type>:<process>
+<order>:<core-id>:<type>:<controlling-terminal>:<process>
 
 <order> Unsigned number defining a relative order in which process will
 be run. For instance, STL could be ‘0’, so it would be the first process
@@ -45,6 +45,15 @@ Types <shutdown> and <safe-shutdown> are like their ‘one-shot’
 counterparts, but are run during system shutdown.  Order is still
 respected, so two process with different order numbers will be started
 from the one with smaller order to the next.
+
+<controlling-terminal> Path of controlling terminal for the process, e.g.
+`/dev/tty1` or `/dev/console`. This field can be left blank, in which
+case process will not have a controlling terminal, its `stdin` will
+point to `/dev/null` (so each read would result on EOF) and `stdout` and
+`stderr` will both point to init own log file. If field is provided,
+`stdin`, `stdout` and `stderr` will be attached to the terminal. If
+more than one process use the same controlling terminal, only the first
+one gets it, and other processes won't start.
 
 <process> Process that will be started with all command line options.
 For <safe-service> process, command line options may contain tags <proc>

@@ -34,7 +34,7 @@ clean:
 
 TESTS = parser_test
 
-parser_test: src/parser.o tests/parser_test.c
+parser_test: src/parser.o src/log.o tests/parser_test.c
 	$(CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
 
 tests: $(TESTS)
