@@ -21,6 +21,7 @@
 #include "log.h"
 #include "mainloop.h"
 #include "mount.h"
+#include "watchdog.h"
 
 #ifndef TIMEOUT_TERM
 #define TIMEOUT_TERM 3000
@@ -574,6 +575,8 @@ do_reboot(int cmd)
     sync(); /* Ensure fs are synced */
     mount_umount_filesystems();
 
+    close_watchdog(true);
+
     if (reboot(cmd) < 0) {
         log_message("Reboot command failed: %m\n");
         result = false;
@@ -704,6 +707,8 @@ main(int argc, char *argv[])
         result = EXIT_FAILURE;
         goto end;
     }
+
+    start_watchdog();
 
     /* Start initial list of process */
     current_stage = STAGE_STARTUP;
