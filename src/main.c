@@ -105,12 +105,15 @@ free_process_list(struct process **list)
     }
 }
 
-static int
+static void
 run_exec(const char *command)
 {
     /* should run the new process using a bash ? */
     /* Should configure ENV ? */
-    return execl("/bin/sh", "/bin/sh", "-c", command, NULL);
+    errno = 0;
+    if (execl("/bin/sh", "/bin/sh", "-c", command, NULL) < 0) {
+        log_message("Could not exec process: %m\n");
+    }
 }
 
 static void
@@ -224,7 +227,7 @@ end:
     return result;
 }
 
-static int
+static bool
 setup_stty(const char *terminal)
 {
     int r, tty;
@@ -253,7 +256,9 @@ setup_stty(const char *terminal)
         goto err_console;
     }
 
-    return tty;
+    (void)close(tty);
+
+    return true;
 
 err_console:
     (void)close(STDERR_FILENO);
@@ -264,7 +269,7 @@ err_dup_out:
 err_dup_in:
     (void)close(tty);
 err_open:
-    return -1;
+    return false;
 }
 
 static bool
@@ -317,23 +322,13 @@ err_open_null:
     return false;
 }
 
-/* Expects SIGCHLD to be disabled when called */
-static pid_t
-spawn_exec(const char *command, const char *console)
+static void
+setup_child(const char *command, const char *console)
 {
     int r;
     pid_t p;
     sigset_t mask;
 
-    p = fork();
-
-    log_message("fork result for '%s': %d\n", command, p);
-    /* the caller is reponsible to check the error */
-    if (p != 0) {
-        return p;
-    }
-
-    /* child code */
     r = sigemptyset(&mask);
     assert(r == 0);
 
@@ -343,27 +338,53 @@ spawn_exec(const char *command, const char *console)
     /* Become a session leader */
     p = setsid();
     if (p == -1) {
-        return -1;
+        goto end;
     }
 
     /* Configure terminal for child */
     if (console[0] != '\0') {
-        if (setup_stty(console) < 0) {
-            return -1;
+        if (!setup_stty(console)) {
+            log_message("Could not setup tty '%s' for process '%s'\n", console, command);
+            goto end;
         }
 
-        /* Give a controlle terminal for the process */
-        r = ioctl(STDIN_FILENO, TIOCSCTTY, 1);
+        /* Give a controlling terminal for the process */
+        r = ioctl(STDIN_FILENO, TIOCSCTTY, 0);
         if (r == -1) {
-            return r;
+            log_message("Could not handle controlling terminal: %m\n");
+            goto end;
         }
     } else {
         if (!setup_stdio()) {
-            return -1;
+            goto end;
         }
     }
 
-    return run_exec(command);
+    run_exec(command);
+
+end:
+    return;
+}
+
+/* Expects SIGCHLD to be disabled when called */
+static pid_t
+spawn_exec(const char *command, const char *console)
+{
+    pid_t p;
+
+    p = fork();
+
+    log_message("fork result for '%s': %d\n", command, p);
+    /* the caller is reponsible to check the error */
+    if (p != 0) {
+        return p;
+    }
+
+    /* child code, should never return */
+    setup_child(command, console);
+
+    /* If returned, we have a lost process */
+    _exit(1);
 }
 
 static enum timeout_result
@@ -413,7 +434,7 @@ start_processes(struct inittab_entry *list)
                 p->next = running_processes;
                 running_processes = p;
             } else {
-                log_message("Could not start process!\n");
+                log_message("Could not fork process!\n");
                 free(p);
                 /* TODO what to do? if a safe one fails, maybe safe state?*/
             }
@@ -558,6 +579,8 @@ handle_shutdown_cmd(struct signalfd_siginfo *info, int command)
 static void
 handle_child_exit(struct signalfd_siginfo *info)
 {
+    (void)info;
+
     pid_t pid;
 
     /* Get our process info from pid */
