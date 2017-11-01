@@ -25,6 +25,8 @@ SOURCE = \
 
 OBJS = $(SOURCE:.c=.o)
 
+AUX_QEMU_TESTS=tests/sleep_crash_test tests/sleep_test
+
 *.o: *.c
 	$(CC) $(CFLAGS) $< -o $@
 
@@ -32,7 +34,7 @@ init: $(OBJS)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS)
+	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS) $(AUX_QEMU_TESTS)
 
 TESTS = parser_test
 
@@ -47,6 +49,16 @@ afl_parser_test: src/lexer.o src/log.o src/inittab.o tests/afl_parser_test.c
 tests: $(TESTS)
 
 afl_tests: $(AFL_TESTS)
+
+tests/sleep_crash_test: tests/sleep_crash_test.c
+	$(CC) $(CFLAGS) $< -o $@
+
+tests/sleep_test: tests/sleep_test.c
+	$(CC) $(CFLAGS) $< -o $@
+
+.PHONY:
+run-qemu-tests: init $(AUX_QEMU_TESTS)
+	./qemu-tests.sh
 
 .PHONY:
 format-code:

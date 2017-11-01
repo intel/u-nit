@@ -1,5 +1,5 @@
 Testing init involves some different approaches, like unit testing and
-fuzzy (currently, for inittab parser only).
+fuzzy (currently, for inittab parser only) or qemu testing.
 
 Unit test
 
@@ -18,3 +18,57 @@ To generate AFL ready executable, run `make tests`. It should generate
 `afl_parser_test` executable - that can be run with a command like
 `afl-fuzz -i tests/data -o fuzz-results/ ./afl_parser_test @@`.
 See AFL documentation for more details.
+
+QEMU testing
+
+Runs init as PID 1 on a virtual environment using qemu. This virtual
+environment needs a kernel image and rootfs. Currently, script that
+perform this testing expects a directory `tests/init-qemu`, with files
+`bzImage` - kernel image - and `rootfs.ext2` - the root file system of
+the environment.
+
+Tests for qemu environment are defined using two files: XXX-inittab and
+XXX-inspect for each test XXX. These files live in `tests/data/qemu`
+directory. First file defines an inittab file, with all programs that
+should be run. Second one defines inspections to be done on init log
+file.
+
+The inittab file can use some helper executables to perform its tests.
+One is the `sleep_test`, which receives as command line arguments an
+arbitrary string and a number. The arbitrary string can be used to
+inspect init log file. The number is for how long, in seconds, the
+program will sleep. After period finishes, program quits. This can help
+test if program B starts only after program A runs.
+
+Another helper is the `sleep_crash_test`, that takes the same two
+arguments as `sleep_test`, but it ends with a crash after the timer.
+Can be helpful to see if a safe program crashes abnormally, for
+instance.
+
+Finally, there are two more helpers: `is_running` and `is_not_running`.
+They take as argument a regular expression to be run on `ps aux`
+command. Helper `is_running` will log failure if a regular expression
+is not found on `ps aux` output, `is_not_running` does the opposite.
+They should help to see if a process is really running or not on a given
+moment. Useful to test if a service is up, for instance. Note that
+the regular expression must not match itself on `ps aux` output - or it
+would have wrong results, as it appears on it. A good way to achieve
+this is to start the regular expression with `[[]`.
+
+To start shutdown on virtual environment, add a `kill -s USR2 1` on
+inittab file, so init will perform shutdown steps.
+
+The inspect file runs some regular expressions on init log file. Note
+that log file also contains any output of programs started by init -
+except those that define a controlling terminal. For instance, on start,
+`sleep_test` prints `START: /usr/bin/sleep_test <string> <timeout>`.
+Regular expressions are defined on three bash arrays variables: EXPECT,
+EXPECT_IN_ORDER and NOT_EXPECT. The first searches for each expression
+on the array on init log file, and expect that they appear on log,
+in the same order they defined on the array. The second simply expects
+that each expression appears on init log file, and the last doesn't
+expect them at all.
+
+In order to mount the rootfs to send files to virtual environment,
+this test needs root permissions. To run it, simply run qemu-tests.sh.
+If some test fails, check `qemu-tests.log` file to see what happened.

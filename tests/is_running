@@ -1,0 +1,14 @@
+#!/bin/bash
+
+TMP=$(mktemp)
+
+ps aux > $TMP
+
+cat $TMP | grep "$@"
+RESULT=$?
+
+if [ $RESULT -eq 0 ]; then
+    echo "IS RUNNING OK for '$@'"
+else
+    echo "IS RUNNING FAIL for '$@'"
+fi

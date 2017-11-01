@@ -1,0 +1,33 @@
+EXPECT_IN_ORDER=(
+    "START.*sleep_test - A"
+    "START.*sleep_test - C"
+    "START.*sleep_crash_test - I"
+    "START.*sleep_test - F"
+    "START.*sleep_test - G"
+    )
+
+EXPECT=(
+    "START.*sleep_test - A"
+    "START.*sleep_test - B"
+    "START.*sleep_test - C"
+    "START.*sleep_test - D"
+    "START.*sleep_test - E"
+    "START.*sleep_test - F"
+    "START.*sleep_test - G"
+    "START.*sleep_crash_test - I"
+    "START.*sleep_test - J"
+    "reaping.*sleep_test A"
+    "reaping.*sleep_test B"
+    "reaping.*sleep_test C"
+    "reaping.*sleep_test D"
+    "reaping.*sleep_test E"
+    "reaping.*sleep_test F"
+    "reaping.*sleep_test G"
+    "reaping.*sleep_crash_test I"
+    "reaping.*sleep_test J"
+    "Abnormal termination of safe process.*sleep_crash_test I"
+    )
+
+NOT_EXPECT=(
+    "Abnormal termination of safe process.*sleep_test J"
+    )
