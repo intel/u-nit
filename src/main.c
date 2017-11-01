@@ -582,39 +582,51 @@ handle_child_exit(struct signalfd_siginfo *info)
     (void)info;
 
     pid_t pid;
+    struct process *p;
 
-    /* Get our process info from pid */
-    struct process *p = find_process((pid_t)info->ssi_pid);
+    /* Reap processes. Multiple SIGCHLD may have been coalesced into one signalfd entry */
+    while (true) {
+        int wstatus;
 
-    if (p == NULL) {
-        /* TODO what to do? */
-        log_message("Couldn't find process %d\n", info->ssi_pid);
-        return;
+        errno = 0;
+        pid = waitpid(-1, &wstatus, WNOHANG);
+        if (pid <= 0) {
+            if (errno != 0 && errno != ECHILD) {
+                log_message("Error on waitpid: %m\n");
+            }
+            break;
+        }
+
+        log_message("child exited: %d\n", pid);
+
+        /* Get our process info from pid */
+        p = find_process(pid);
+        if (p == NULL) {
+            /* TODO what to do? */
+            log_message("Couldn't find process %d\n", pid);
+            continue;
+        }
+
+        log_message("reaping [%d] (%s)'\n", p->pid, p->config.process_name);
+        /* TODO check also if a <service-safe> exited or if any safe process
+         * exited returning != 0 */
+        /* A safe process crash asks for safe_mode */
+        if (is_safe_entry(&p->config) && !WIFEXITED(wstatus)) {
+            /* TODO safe mode */
+            log_message("Abnormal termination of safe process [%d] (%s)\n", p->pid,
+                    p->config.process_name);
+        }
+
+        /* One shot process terminated decrement counter to start remaining_processes*/
+        if (is_one_shot_entry(&p->config)) {
+            // TODO account only for child termination
+            remaining.pending_finish--;
+            log_message("Pending decreased to %d\n", remaining.pending_finish);
+        }
+
+        /* Process exited, remove from our running process list */
+        remove_process(&running_processes, p);
     }
-
-    /* Reap process */
-    pid = waitpid(p->pid, NULL, WNOHANG);
-    if (pid == -1) {
-        /* TODO wait, what? It should not happen as epoll told that this
-         * process exited. But, what to do if it does happen? */
-        return;
-    }
-
-    /* A safe process crash asks for safe_mode */
-    if (is_safe_entry(&p->config) && ((info->ssi_code == CLD_KILLED) || (info->ssi_code == CLD_DUMPED))) {
-        /* TODO safe mode */
-    }
-
-    log_message("Was it called %d\n", p->config.type);
-    /* One shot process terminated decrement counter to start remaining_processes*/
-    if (is_one_shot_entry(&p->config)) {
-        // TODO account only for child termination
-        remaining.pending_finish--;
-        log_message("Pending decreased to %d\n", remaining.pending_finish);
-    }
-
-    /* Process exited, remove from our running process list */
-    remove_process(&running_processes, p);
 }
 
 static void
