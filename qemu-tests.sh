@@ -2,6 +2,7 @@
 
 TESTDIR=tests/data
 QEMUDIR=tests/init-qemu
+SRCDIR=src
 
 LOG_FILE=qemu-tests.log
 
@@ -11,8 +12,13 @@ SLEEP_CRASH_TEST_EXEC=tests/sleep_crash_test
 IS_RUNNING_EXEC=tests/is_running
 IS_NOT_RUNNING_EXEC=tests/is_not_running
 
+ROOT_FS=rootfs.ext2
+GCOV_FS=gcov.ext4
+
 QEMU_TIMEOUT=60
 LOG_QEMU=
+
+RUNNING_COVERAGE=false
 
 function log_message() {
     echo "$@" >> $LOG_FILE
@@ -25,7 +31,8 @@ function run_qemu() {
           -smp 4 -device intel-iommu,intremap=on,x-buggy-eim=on \
           -s -kernel $QEMUDIR/bzImage  \
           -cpu kvm64,-kvm_pv_eoi,-kvm_steal_time,-kvm_asyncpf,-kvmclock,+vmx \
-          -hda $QEMUDIR/rootfs.ext2 \
+          -hda $QEMUDIR/$ROOT_FS \
+          -hdb $QEMUDIR/$GCOV_FS \
           -serial mon:stdio \
           -chardev file,id=char0,path=${LOG_INIT} -serial chardev:char0 \
           -append "root=/dev/sda rw console=ttyS0 iip=dhcp" \
@@ -39,7 +46,7 @@ function mount_test_fs() {
         mkdir $QEMUDIR/mnt
     fi
 
-    sudo mount $QEMUDIR/rootfs.ext2 $QEMUDIR/mnt/
+    sudo mount $QEMUDIR/$1 $QEMUDIR/mnt/
 }
 
 function umount_test_fs() {
@@ -47,13 +54,19 @@ function umount_test_fs() {
 }
 
 function setup_environment() {
-    mount_test_fs
+    mount_test_fs $ROOT_FS
     sudo cp $INIT_EXEC $QEMUDIR/mnt/usr/sbin/init
     sudo cp $SLEEP_TEST_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $SLEEP_CRASH_TEST_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_NOT_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     umount_test_fs
+
+    if [ "$RUNNING_COVERAGE" = true ]; then
+        mount_test_fs $GCOV_FS
+        sudo rm -rf $QEMUDIR/mnt/src
+        umount_test_fs
+    fi
 }
 
 function update_inittab() {
@@ -172,7 +185,7 @@ function run_test() {
 
     echo "Testing inittab $INITTAB"
 
-    mount_test_fs
+    mount_test_fs $ROOT_FS
     update_inittab $INITTAB
     umount_test_fs
 
@@ -209,4 +222,21 @@ function run_tests() {
     return $ERRORS_FOUND
 }
 
+function extract_coverage_information() {
+    echo "Extracting coverage information..."
+    mount_test_fs $GCOV_FS
+
+    cp $QEMUDIR/mnt/src/*.gcda $SRCDIR
+
+    umount_test_fs
+}
+
+if [ "$1" = "--extract-coverage-information" ]; then
+    RUNNING_COVERAGE=true
+fi
+
 run_tests
+
+if [ "$RUNNING_COVERAGE" = true ]; then
+    extract_coverage_information
+fi

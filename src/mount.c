@@ -27,6 +27,9 @@ static const struct mount_table {
     { NULL, "/tmp", "tmpfs", NULL, 0, true },
     { NULL, "/sys/kernel/debug", "debugfs", NULL, 0, false },
     { NULL, "/sys/kernel/security", "securityfs", NULL, MS_NOSUID | MS_NOEXEC | MS_NODEV, false },
+#ifdef COMPILING_COVERAGE
+    { "/dev/sdb", "/gcov", "ext4", NULL, 0, true },
+#endif
 };
 
 struct mount_point {

@@ -4,6 +4,9 @@ LDFLAGS +=
 
 AFL_CC ?= afl-gcc
 
+CFLAGS_COVERAGE ?= $(CFLAGS) -fprofile-arcs -ftest-coverage -fprofile-dir=/gcov -DCOMPILING_COVERAGE
+LDFLAGS_COVERAGE ?= $(LDFLAGS) -fprofile-arcs
+
 TESTS_CFLAGS += $(CFLAGS) "-Isrc/"
 
 ifeq ($(DEBUG),1)
@@ -24,6 +27,9 @@ SOURCE = \
 	src/watchdog.c
 
 OBJS = $(SOURCE:.c=.o)
+GCOV_GCNO = $(SOURCE:.c=.gcno)
+GCOV_GCDA = $(SOURCE:.c=.gcda)
+LCOV_FILES = lcov.info lcov-out
 
 AUX_QEMU_TESTS=tests/sleep_crash_test tests/sleep_test
 
@@ -34,7 +40,7 @@ init: $(OBJS)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS) $(AUX_QEMU_TESTS)
+	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS) $(AUX_QEMU_TESTS) $(GCOV_GCNO) $(GCOV_GCDA) $(LCOV_FILES)
 
 TESTS = parser_test
 
@@ -59,6 +65,17 @@ tests/sleep_test: tests/sleep_test.c
 .PHONY:
 run-qemu-tests: init $(AUX_QEMU_TESTS)
 	./qemu-tests.sh
+
+.PHONY:
+coverage:
+	$(MAKE) CFLAGS="$(CFLAGS_COVERAGE)" LDFLAGS="$(LDFLAGS_COVERAGE)"
+
+.PHONY:
+run-qemu-tests-coverage: coverage $(AUX_QEMU_TESTS)
+	./qemu-tests.sh --extract-coverage-information
+	lcov -d . -c -o lcov.info
+	genhtml lcov.info --output-directory lcov-out
+	xdg-open lcov-out/index.html
 
 .PHONY:
 format-code:

@@ -24,8 +24,9 @@ QEMU testing
 Runs init as PID 1 on a virtual environment using qemu. This virtual
 environment needs a kernel image and rootfs. Currently, script that
 perform this testing expects a directory `tests/init-qemu`, with files
-`bzImage` - kernel image - and `rootfs.ext2` - the root file system of
-the environment.
+`bzImage` - kernel image, `rootfs.ext2` - the root file system of
+the environment and `gcov.ext4` - where coverage obtained by gcov is
+stored.
 
 Tests for qemu environment are defined using two files: XXX-inittab and
 XXX-inspect for each test XXX. These files live in `tests/data/qemu`
@@ -70,5 +71,13 @@ that each expression appears on init log file, and the last doesn't
 expect them at all.
 
 In order to mount the rootfs to send files to virtual environment,
-this test needs root permissions. To run it, simply run qemu-tests.sh.
+this test needs root permissions. To run it, simply run
+`make run-qemu-tests`.
 If some test fails, check `qemu-tests.log` file to see what happened.
+
+Coverage information of QEMU tests can also be extracted: run
+`make run-qemu-tests-coverage`. This will compile init with coverage
+support (`make coverage`), run the tests using QEMU, extract the
+coverage information and run `lcov`
+(http://ltp.sourceforge.net/coverage/lcov.php) to get a nice view of
+coverage. It should open the browser to show coverage information.

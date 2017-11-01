@@ -68,6 +68,10 @@ static struct mainloop_timeout *one_shot_timeout;
 
 static int shutdown_command = RB_AUTOBOOT; /* Is this a sensible default? */
 
+#ifdef COMPILING_COVERAGE
+    extern void __gcov_flush(void);
+#endif
+
 static void
 remove_process(struct process **list, struct process *p)
 {
@@ -108,6 +112,9 @@ free_process_list(struct process **list)
 static void
 run_exec(const char *command)
 {
+#ifdef COMPILING_COVERAGE
+    __gcov_flush();
+#endif
     /* should run the new process using a bash ? */
     /* Should configure ENV ? */
     errno = 0;
@@ -678,6 +685,10 @@ do_reboot(int cmd)
 
     close_watchdog(true);
 
+#ifdef COMPILING_COVERAGE
+    __gcov_flush();
+    sync();
+#endif
     if (reboot(cmd) < 0) {
         log_message("Reboot command failed: %m\n");
         result = false;
