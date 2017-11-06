@@ -1,0 +1,27 @@
+FEATURES
+========
+- Start safe mode application after abnormal termination of a `safe`
+  application (as defined on inittab). init should create a process
+  for it on its own startup and wait for some kind of signal to
+  exec the safe application. This should avoid init being unable to
+  start safe application due to system resources exhaustion.
+- Mount other filesystems than those of system.
+- Properly reap grandchildren process.
+- Enforce <core-id> affinity
+- A proper log system
+
+TESTS
+=====
+- Create - somehow - mocks to aid test error handling. For instance,
+  mock 'open()' so it fails, to see how good is our error handling.
+- Enable init to run on container - that can be inferred using
+  `getenv("container")`. This should allow us to easily test init under
+  valgrind or address sanitizer (they need access to `/proc`, that
+  would be available on a container environment).
+- Increase general coverage of current tests.
+
+MISRA-C
+=======
+- There are various deviations right now in the code. Decide which
+  ones should should be ironed out and which we'll file deviation
+  records.
