@@ -1,0 +1,243 @@
+1. Introduction
+
+Init is the first process started after the kernel boots the computer and is
+responsible for bringing up and maintaining userspace services. Init needs to
+know which process are necessary as well as any dependence among them, so that
+if process B must be started after process A, init has a way to ensure that.
+
+1.1. Purpose
+
+This document provides an overview of the Init and is intended to cover and
+convey the important architectural decisions made.
+
+1.2. Scope
+
+This document is limited to an explaination of the implemented Init, its
+architectural goals and constraints as well as its assumptions of use and
+functionalities.
+
+It contains high-level diagrams that describe how the different components
+interact with each other.
+
+2. Design method
+
+This software follows a minimalism approach, which means it is designed with
+few functionalities and to use the least hardware and software resources
+possible.
+
+The functionalities are derived from requirements in a way that each
+functionality can be traced to one or more requirement.
+
+The implementation is guided by the MISRA-C [1], which is a set of software
+guidelines for the C language. MISRA-C aims to enhance safety, security
+and reliability in embedded systems.
+
+3. Requirements
+
+ - Initialize, configure and feed a watchdog
+ - Mount necessary filesystems
+ - Launch other services considering order and criticality
+ - Inform designed application when a "safe/critical" application crashes
+ - Must disable CTRL-ALT-DEL key combination
+ - Be a session leader
+ - Properly handle signals
+ - Only run if it was started by the Linux Kernel
+ - Handle shutdown and reboot
+ - Handle the exit of a child process
+ - Sanitize the child process terminal
+ - Configure properly its own file creation mask
+ - Do not leak file descriptors for child process
+
+3. Architectural Representation
+
+To make easier to understand the architecture, this document decomposes the
+Init in five different components. This is only conceptual division based on
+functionalities, there is no explicitly separation in the build and the
+components can be implemented in more than one file.
+
+Below is an overview of the Init logic:
+
+
+                              +----------------+
+                              |                |
+                              |      Init      |
+  +-------------------------->|                |<---------------------------+
+  |                   +------>+----------------+<---------+                 |
+  |                   |                ^                  |                 |
+  |                   |                |                  |                 |
+  |                spawner           logger             parser              |
+  |                   |                |                  |                 |
+  |      +----------------+    +----------------+    +----------------+     |
+  |      |                |    |                |    |                |     |
+  |      |    Spawner     |    |     Logger     |    |     Parser     |     |
+  |      |                |    |                |    |                |     |
+  |      +----------------+    +----------------+    +----------------+     |
+  |                                                                         |
+orchestrator                                                     signal handler
+  |                                                                         |
++----------------+                                           +----------------+
+|                |                                           |                |
+|      Main      |                                           | SignalHandler  |
+|                |                                           |                |
++----------------+                                           +----------------+
+
+3.1. Main
+
+This is the biggest component and is responsible for controlling the
+application life-cycle (mainloop), sanitizing terminals, configuring the file
+creating mask, mounting the filesystems, configuring and feeding the watchdog
+and handling the shutdown/reboot process.
+
+The mainloop is responsible for waiting and dispatching events or messages,
+when there is nothing to handle, the mainloop waits in a way that does not
+waste computer resources. This mainloop is implemented using epoll()[2], which
+means synchronous and Linux specific.
+
+The mainloop can be awakened by two things; when a timer expires or when it
+receives a signal. In both cases, a given callback -- one per signal and one
+per timeout --  is called. After handling the signals and the timeouts, the
+mainloop calls a post-iteration callback, if defined, and returns to the
+epoll().
+
+It is possible to add multiple timeouts. Each one can contain its own
+callback, but only one signal handler callback and one mask. The Init
+explicitly handles four signals:
+
+ - SIGCHLD - To monitor started process
+ - SIGTERM - Signal that can be used by external process to reboot the system
+ - SIGUSR1 - Signal that can be used by external process to halt the system
+ - SIGUSR2 - Signal that can be used by external process to shutdown the system
+
+The mainloop monitors the signals using the syscall signalfd()[3]. It receives
+a signal mask then creates a file descriptor, using the signalfd(), that is
+then monitored by epoll().
+
+3.2. SignalHandler
+
+The SignalHandler is the component responsible for taking the correct action
+when a signal is received. This Init does not handle signals using the
+syscalls, signal()[4] and sigaction()[5]. Instead, it uses the syscall
+signalfd().
+
+The signalfd() has the advantage of creating a file descriptor from a signal
+mask that may be monitored by the epoll(). This allows Init to monitor the
+signals and timeouts in the same place, turning the code clear.
+
+When a signal is received, the file descriptor wakes the mainloop that calls
+the handler associated with the specified signal. A list with the signals and
+its specific actions is described below:
+
+ - SIGCHLD
+
+  The handler for this signal reaps all child processes that died. There can be
+  multiple SIGCHLD coalesced in one signalfd entry, so this function calls
+  waitpid()[6] as many times as necessary, then checks the type of each child
+  process.  If the died process is a "safe-process" and it has finished
+  abnormally or crashed, Init is conducted to a "safe-mode", else if the
+  process is "one-shot" kind, the list that controls how many "one-shot"
+  process are pending is decreased, otherwise the process is just removed from
+  the monitored process.
+
+ - SIGTERM
+ - SIGUSR1
+ - SIGUSR2
+
+ These signals share the same handler, which starts the shutdown process,
+ terminating all the running process and informing the mainloop about it. After
+ all process have been finished, the syscall reboot()[7] with the proper
+ parameter to reboot, halt or shuttdown the system.
+
+3.3. Spawner
+
+The spawner component is responsible for launching the processes described in
+the "inittab" file.
+
+It creates a new process using fork()[8] and then configures the environment
+for this process before replacing this new process with a new process image.
+The procedures executed in this process to setup the environment are:
+
+ - Reset the signal mask logic
+ - Become a session leader
+ - Configure a controlling terminal (if specified in its inittab entry)
+ - Configure stdin/stdout/stderr. It points to the controlling terminal, if
+   specified, otherwise stdin points to /dev/nulll and stdout/stderr points
+   to the same file used by the Init to log.
+
+3.4. Logger
+
+Logger is the component responsible for centralizing all debug messages. The
+default output is /dev/ttyS1 that is the second serial port, this output
+can be overridden during the build using the flag -DLOG_FILE.
+
+The function defined in this component has the same behavior of the
+printf()[9] but the only allows message up to 256 characters.
+
+3.5. Parser
+
+This component is responsible for the task executed before starting the
+processes and is closely related to the inittab configuration. Details about
+the syntax allowed are described in detail in spec/inittab-spec.txt.
+
+The entry point for this module is the function that reads an inittab file and
+returns a list with all process entries. A process entry is a struct that
+described which process must be started, what is its category, and how to
+launch it.
+
+4. Architectural Goals and Constraints
+
+The architecture was defined considering the functionals requirements and the
+environment/use-case that it is intended to be used. These requirements have a
+significant bearing on the architecture:
+
+ - The Init requires an "inittab" file in the exact format described in
+   spec/inittab-spec.txt.
+ - Init requires Linux OS, it is not intended to run in any other OS.
+ - It requires glibc >= 2.9
+ - Init must be the first process running the in the machine.
+
+5. Using Init
+
+There are two ways that the user can interact with this software. One is
+through its configuration file and the other is sending specific signals to
+perform well-defined actions.
+
+5.1 Configuration
+
+As mentioned in the introduction, Init needs to know which process must start
+and any dependence among them, it means, if process B must be started after
+process A, Init has a way to ensure that.
+
+The way Init achieves this feature is by reading a file that describes the
+processes to be started and additional information about them, that specifies
+the order and priority in order to be respected.
+
+The inittab file can have multiple one-line entries on the form:
+
+<order>:<core-id>:<type>:<controlling-terminal>:<process>
+
+More information about the individual parameters can be found in
+specs/inittab-spec.txt.
+
+5.2 Signals
+
+An external application can ask Init to take an action sending a signal. The
+signal can be sent using the syscall kill()[9]. Init only accepts signals from
+process with the same user ID (UID).
+
+The signals and the Init actions are:
+
+ - SIGTERM - reboot the system
+ - SIGUSR1 - halt the system
+ - SIGUSR2 - shutdown the system
+
+
+[1] - https://www.misra.org.uk/MISRAHome/MISRAC2012/tabid/196/Default.aspx
+[2] - http://man7.org/linux/man-pages/man7/epoll.7.html
+[3] - http://man7.org/linux/man-pages/man2/signalfd.2.html
+[4] - http://man7.org/linux/man-pages/man7/signal.7.html
+[5] - http://man7.org/linux/man-pages/man2/sigaction.2.html
+[6] - https://linux.die.net/man/2/waitpid
+[7] - http://man7.org/linux/man-pages/man2/reboot.2.html
+[8] - http://man7.org/linux/man-pages/man2/fork.2.html
+[9] - https://linux.die.net/man/3/printf
+[10] - https://linux.die.net/man/2/kill
