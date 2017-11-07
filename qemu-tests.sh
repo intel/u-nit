@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Copyright (C) 2017 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 TESTDIR=tests/data
 QEMUDIR=tests/init-qemu
 SRCDIR=src

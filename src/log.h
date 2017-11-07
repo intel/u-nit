@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef LOG_HEADER_
 #define LOG_HEADER_
 

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef MAINLOOP_HEADER_
 #define MAINLOOP_HEADER_
 

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef MOUNT_HEADER_
 #define MOUNT_HEADER_
 

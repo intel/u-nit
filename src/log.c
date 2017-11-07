@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>

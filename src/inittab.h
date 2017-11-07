@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef INITTAB_HEADER_
 #define INITTAB_HEADER_
 

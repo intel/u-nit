@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2017 Intel Corporation
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef WATCHDOG_HEADER_
 #define WATCHDOG_HEADER_
 
