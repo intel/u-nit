@@ -403,7 +403,7 @@ static bool
 start_processes(struct inittab_entry *list)
 {
     int32_t current_order;
-    bool result = true;
+    bool result = true, has_one_shot = false;
 
     if (list != NULL) {
         struct inittab_entry *entry;
@@ -429,6 +429,7 @@ start_processes(struct inittab_entry *list)
 
                 if (is_one_shot_entry(&p->config)) {
                     remaining.pending_finish++;
+                    has_one_shot = true;
                 }
 
                 p->next = running_processes;
@@ -445,7 +446,7 @@ start_processes(struct inittab_entry *list)
         remaining.remaining = entry;
     }
 
-    if (result) {
+    if (has_one_shot) {
         one_shot_timeout = mainloop_add_timeout(TIMEOUT_ONE_SHOT, one_shot_timeout_cb);
         if (one_shot_timeout == NULL) {
             /* TODO We couldn't add a timeout to watch over one_shot process
