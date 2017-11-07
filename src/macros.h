@@ -25,4 +25,6 @@
 #define FORMAT_PRINTF(fmt, arg)
 #endif
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 #endif /*__MACROS_H__*/

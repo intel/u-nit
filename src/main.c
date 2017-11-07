@@ -131,7 +131,7 @@ setup_signals(sigset_t *mask)
     r = sigemptyset(mask);
     assert(r == 0);
 
-    for (i = 0; i < (sizeof(signals)/sizeof(signals[0])); i++) {
+    for (i = 0; i < ARRAY_SIZE(signals); i++) {
         r = sigaddset(mask, signals[i]);
         assert(r == 0);
     }

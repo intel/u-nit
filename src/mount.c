@@ -41,7 +41,7 @@ mount_mount_filesystems(void)
     bool result = true;
 
     for (mnt = mount_table;
-            mnt < mount_table + sizeof(mount_table) / sizeof((mount_table)[0]);
+            mnt < mount_table + ARRAY_SIZE(mount_table);
             mnt++) {
         const char *source = (mnt->source != NULL) ? mnt->source : "none";
         int err;
@@ -114,7 +114,7 @@ get_mountpoints(void)
 
         /* No need to umount these 'system' mountpoints */
         for (mnt = mount_table;
-                mnt < (mount_table + (sizeof(mount_table) / sizeof((mount_table)[0])));
+                mnt < (mount_table + ARRAY_SIZE(mount_table));
                 mnt++) {
             if (strcmp(path, mnt->target) == 0) {
                 should_umount = false;
