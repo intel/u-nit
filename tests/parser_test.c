@@ -1,10 +1,16 @@
-#include <parser.h>
-
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+/*
+ * This is a whitebox testing of an internal function of `inittab.c`
+ * (inittab_parse_entry).
+ * That's why we include it directly here. This whitebox test is useful
+ * because allows a more granular (line by line) checking of parser.
+ */
+#include <inittab.c>
 
 struct test_data {
     const char *file_name;
