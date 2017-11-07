@@ -566,6 +566,12 @@ handle_shutdown_cmd(struct signalfd_siginfo *info, int command)
     remaining.remaining = NULL;
     remaining.pending_finish = 0;
 
+    /* Cancel any pending one-shot timeout */
+    if (one_shot_timeout != NULL) {
+        mainloop_remove_timeout(one_shot_timeout);
+        one_shot_timeout = NULL;
+    }
+
     /* We wait for all running process to exit before starting shutdown ones */
     /* TODO is this right? */
     current_stage = STAGE_TERMINATION;
