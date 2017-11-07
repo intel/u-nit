@@ -1,0 +1,7 @@
+.*
+*.o
+*.gcno
+*.gcda
+*.log
+lcov.info
+lcov-out
