@@ -1,0 +1,13 @@
+# This file does not only contain valid entries,
+# but is also semantically valid as whole, i.e.,
+# Valid entries and a safe mode.
+
+1::<one-shot>::/usr/bin/sleep_test A 1
+1::<one-shot>::/usr/bin/sleep_test B 1
+2::<service>::/usr/bin/sleep_test D 1000
+3::<one-shot>::/usr/bin/is_running "[^]]sleep_test D"
+3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test A"
+3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test B"
+3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test C"
+4::<one-shot>::/usr/bin/kill -s USR2 1
+2::<safe-mode>::/usr/bin/true

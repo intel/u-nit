@@ -1,0 +1,20 @@
+Testing init involves some different approaches, like unit testing and
+fuzzy (currently, for inittab parser only).
+
+Unit test
+
+Only for inittab parser at this moment. Perform some tests for
+`inittab_parse_entry` function.
+
+To generate unit test executable, run `make tests`. It should generate
+`parser_test` executable - which must run with no issues.
+
+Fuzzy testing
+
+American Fuzzy Lop (AFL) is run on a single executable, using
+`tests/data/parser` files as input for the fuzzy tool.
+
+To generate AFL ready executable, run `make tests`. It should generate
+`afl_parser_test` executable - that can be run with a command like
+`afl-fuzz -i tests/data -o fuzz-results/ ./afl_parser_test @@`.
+See AFL documentation for more details.
