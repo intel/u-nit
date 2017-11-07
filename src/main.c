@@ -441,6 +441,12 @@ start_processes(struct inittab_entry *list)
             }
 
             entry = entry->next;
+
+            /* If next entry is on next order, but no one-shot entry
+             * was started in this order, let's simply start next order */
+            if ((entry != NULL) && (entry->order != current_order) && !has_one_shot) {
+                current_order = entry->order;
+            }
         }
 
         remaining.remaining = entry;
