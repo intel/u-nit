@@ -38,3 +38,7 @@ parser_test: src/parser.o src/log.o tests/parser_test.c
 	$(CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
 
 tests: $(TESTS)
+
+.PHONY:
+format-code:
+	clang-format -i -style=file src/*.c src/*.h
