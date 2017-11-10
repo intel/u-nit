@@ -754,12 +754,24 @@ static bool setup_console(void)
 	return r;
 }
 
+#ifndef NDEBUG
+static bool is_inside_container(void)
+{
+	/* This check is valid only if we are PID 1. So, if we are
+	 * to be run on diferent PID, we should rethink this function */
+	if (getenv("container") != NULL) {
+		return true;
+	}
+
+	return false;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	sigset_t mask;
 	struct mainloop_signal_handler *msh = NULL;
 	int r, result = EXIT_SUCCESS;
-	pid_t p;
 
 	current_stage = STAGE_SETUP;
 
@@ -782,17 +794,18 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
+#ifndef NDEBUG
+	if (!is_inside_container() && !setup_console()) {
+#else
 	if (!setup_console()) {
+#endif
 		result = EXIT_FAILURE;
 		goto end;
 	}
 
-	/* Become a session leader */
-	p = setsid();
-	if (p == -1) {
-		result = EXIT_FAILURE;
-		goto end;
-	}
+	/* Become a session leader. Only reason to fail is if we already
+	 * are session leader - in a container, for instance */
+	(void)setsid();
 
 	if (!mount_mount_filesystems()) {
 		result = EXIT_FAILURE;
