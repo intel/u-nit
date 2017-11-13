@@ -765,12 +765,12 @@ int main(int argc, char *argv[])
 
 	if (getpid() != 1) {
 		result = EXIT_FAILURE;
-		goto end;
+		goto err;
 	}
 
 	if (!read_inittab(INITTAB_FILENAME, &inittab_entries)) {
 		result = EXIT_FAILURE;
-		goto end;
+		goto err;
 	}
 
 	(void)umask(0);
@@ -857,5 +857,6 @@ end:
 		mainloop_remove_signal_handler(msh);
 	}
 
+err:
 	return result;
 }
