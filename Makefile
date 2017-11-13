@@ -80,3 +80,7 @@ run-qemu-tests-coverage: coverage $(AUX_QEMU_TESTS)
 .PHONY:
 format-code:
 	clang-format -i -style=file src/*.c src/*.h
+
+.PHONY:
+run-valgrind-tests: init $(AUX_QEMU_TESTS)
+	./qemu-tests.sh --run-and-check-valgrind

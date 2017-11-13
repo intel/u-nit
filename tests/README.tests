@@ -81,3 +81,32 @@ support (`make coverage`), run the tests using QEMU, extract the
 coverage information and run `lcov`
 (http://ltp.sourceforge.net/coverage/lcov.php) to get a nice view of
 coverage. It should open the browser to show coverage information.
+
+Valgrind testing
+
+Runs init as PID 1 inside container environment under Valgrind.
+Container is used instead of QEMU because it easily makes `/proc`
+available for Valgrind. (On QEMU /proc wouldn't be mounted until
+init mount it.)
+
+This tests perform all tests on `tests/data/qemu` directory with init
+under Valgrind, checking for memory issues. If any is found, this
+check should fail and show Valgrind output on `qemu-tests.log`.
+
+To run these tests, run `make run-valgrind-tests`.
+
+Note that Valgrind doesn't implement `reboot` syscall, so it will
+complain about "syscall 169 not implemented". This should not be an
+issue. Indeed, as `reboot` call fails, init shall exit with exit code
+1 (`EXIT_FAILURE`), due to `reboot` call failure. On container
+environment this is not an issue - container will simply exit. This
+even allows some cleanup code to run - currently, on normal execution,
+`reboot` is called before cleanup, so it never happens.
+
+Naturally, this test expect that Valgrind is available on target image
+ - rootfs.ext2.
+
+Container being used for tests is systemd-nspawn (minimum
+systemd-version: 233)
+[https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html].
+Note that to run the container, root permissions are necessary.

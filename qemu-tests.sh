@@ -18,10 +18,12 @@ IS_NOT_RUNNING_EXEC=tests/is_not_running
 ROOT_FS=rootfs.ext2
 GCOV_FS=gcov.ext4
 
-QEMU_TIMEOUT=60
+EXEC_TIMEOUT=60
 LOG_QEMU=
+LOG_CONTAINER=
 
 RUNNING_COVERAGE=false
+CHECK_VALGRIND=false
 
 function log_message() {
     echo "$@" >> $LOG_FILE
@@ -29,7 +31,7 @@ function log_message() {
 
 function run_qemu() {
     LOG_INIT=$1
-    LOG_QEMU=$(timeout -s TERM --foreground ${QEMU_TIMEOUT}  \
+    LOG_QEMU=$(timeout -s TERM --foreground ${EXEC_TIMEOUT}  \
         qemu-system-x86_64 -machine q35,kernel_irqchip=split -m 512M -enable-kvm \
           -smp 4 -device intel-iommu,intremap=on,x-buggy-eim=on \
           -s -kernel $QEMUDIR/bzImage  \
@@ -42,6 +44,15 @@ function run_qemu() {
           -netdev user,id=net -device e1000e,addr=2.0,netdev=net \
           -device ib700,id=watchdog0 \
           -device intel-hda,addr=1b.0 -nographic -device hda-duplex 2>&1)
+}
+
+function run_valgrind_container() {
+    LOG_INIT=$1
+    LOG_CONTAINER=$(sudo timeout -s KILL --foreground ${EXEC_TIMEOUT} \
+        systemd-nspawn -i $QEMUDIR/$ROOT_FS \
+          --bind=${LOG_INIT}:/dev/ttyS1 \
+          -q \
+          /usr/bin/valgrind --leak-check=full --show-leak-kinds=all /sbin/init 2>&1)
 }
 
 function mount_test_fs() {
@@ -182,9 +193,9 @@ function inspect() {
     return $RESULT
 }
 
-function run_test() {
+function run_ordinary_test() {
     INITTAB=$1
-    INSPECT=$2
+    INSPECT=${INITTAB/-inittab/-inspect}
 
     echo "Testing inittab $INITTAB"
 
@@ -199,8 +210,51 @@ function run_test() {
     return $?
 }
 
+function inspect_valgrind() {
+    INITTAB=$1
+    RESULT=0
+    VALGRIND_OK="==1== All heap blocks were freed -- no leaks are possible"
+
+    log_message "-------------------------------------------------------------"
+    log_message "Inspecting valgrind output for $INITTAB"
+    log_message "-------------------------------------------------------------"
+
+    echo "$LOG_CONTAINER" | grep "$VALGRIND_OK" &> /dev/null
+    if [ $? -eq 1 ]; then
+        RESULT=1
+        log_message ""
+        log_message "Valgrind check not clean. Details below:"
+        log_message "-------------------------------------------------------------"
+        log_message "$LOG_CONTAINER"
+    else
+        log_message "Valgrind check OK"
+    fi
+
+    log_message "-------------------------------------------------------------"
+    log_message ""
+
+    return $RESULT
+}
+
+function run_valgrind_test() {
+    INITTAB=$1
+
+    echo "Testing inittab $INITTAB with valgrind"
+
+    mount_test_fs $ROOT_FS
+    update_inittab $INITTAB
+    umount_test_fs
+
+    TMPFILE=$(mktemp)
+
+    run_valgrind_container $TMPFILE
+    inspect_valgrind $INITTAB
+    return $?
+}
+
 function run_tests() {
     ERRORS_FOUND=0
+    RUN_TEST=$1
 
     echo "Setting environment up"
     setup_environment
@@ -209,7 +263,7 @@ function run_tests() {
     echo "Running tests..."
     TESTS=$(ls $TESTDIR/qemu/*-inittab)
     for TEST in $TESTS; do
-        run_test $TEST ${TEST/-inittab/-inspect}
+        $RUN_TEST $TEST
         if [ $? -ne 0 ]; then
             ERRORS_FOUND=1
         fi
@@ -234,11 +288,18 @@ function extract_coverage_information() {
     umount_test_fs
 }
 
+# TODO this can be a getopt
 if [ "$1" = "--extract-coverage-information" ]; then
     RUNNING_COVERAGE=true
+elif [ "$1" = "--run-and-check-valgrind" ]; then
+    CHECK_VALGRIND=true
 fi
 
-run_tests
+if [ "$CHECK_VALGRIND" = true ]; then
+    run_tests run_valgrind_test
+else
+    run_tests run_ordinary_test
+fi
 
 if [ "$RUNNING_COVERAGE" = true ]; then
     extract_coverage_information
