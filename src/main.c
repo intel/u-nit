@@ -293,7 +293,7 @@ static bool setup_stdio(void)
 		goto err_dup_null;
 	}
 
-	out_fd = open(LOG_FILE, O_WRONLY);
+	out_fd = log_fd();
 	if (out_fd == -1) {
 		log_message("Could not open logfile: %m\n");
 		goto err_open_out;

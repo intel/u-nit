@@ -14,5 +14,6 @@
 #endif
 
 void log_message(const char *s, ...) FORMAT_PRINTF(1, 2);
+int log_fd(void);
 
 #endif
