@@ -36,7 +36,7 @@
 #endif
 
 #ifndef INITTAB_FILENAME
-#define INITTAB_FILENAME "/etc/inittab2"
+#define INITTAB_FILENAME "/etc/inittab"
 #endif
 
 enum stage {

@@ -73,7 +73,7 @@ function setup_environment() {
 }
 
 function update_inittab() {
-    sudo cp $1 $QEMUDIR/mnt/etc/inittab2
+    sudo cp $1 $QEMUDIR/mnt/etc/inittab
 }
 
 function inspect() {
