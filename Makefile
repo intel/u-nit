@@ -7,6 +7,9 @@ AFL_CC ?= afl-gcc
 CFLAGS_COVERAGE ?= $(CFLAGS) -fprofile-arcs -ftest-coverage -fprofile-dir=/gcov -DCOMPILING_COVERAGE
 LDFLAGS_COVERAGE ?= $(LDFLAGS) -fprofile-arcs
 
+CFLAGS_ASAN ?= $(CFLAGS) -fsanitize=address
+LDFLAGS_ASAN ?= $(LDFLAGS) -fsanitize=address
+
 TESTS_CFLAGS += $(CFLAGS) "-Isrc/"
 
 ifeq ($(DEBUG),1)
@@ -38,6 +41,10 @@ AUX_QEMU_TESTS=tests/sleep_crash_test tests/sleep_test
 
 init: $(OBJS)
 	$(CC) $^ -o $@ $(LDFLAGS)
+
+.PHONY:
+init-asan:
+	$(MAKE) CFLAGS="$(CFLAGS_ASAN)" LDFLAGS="$(LDFLAGS_ASAN)"
 
 clean:
 	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS) $(AUX_QEMU_TESTS) $(GCOV_GCNO) $(GCOV_GCDA) $(LCOV_FILES)
@@ -84,3 +91,7 @@ format-code:
 .PHONY:
 run-valgrind-tests: init $(AUX_QEMU_TESTS)
 	./qemu-tests.sh --run-and-check-valgrind
+
+.PHONY:
+run-asan-tests: clean init-asan $(AUX_QEMU_TESTS)
+	./qemu-tests.sh --check-asan

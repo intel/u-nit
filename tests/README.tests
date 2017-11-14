@@ -110,3 +110,33 @@ Container being used for tests is systemd-nspawn (minimum
 systemd-version: 233)
 [https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html].
 Note that to run the container, root permissions are necessary.
+
+ASAN testing
+
+Runs init as PID 1 inside container environment with AdressSanitizer
+enabled [https://github.com/google/sanitizers]. Container is used
+instead of QEMU because it easily makes `/proc` available from ASAN.
+(On QEMU /proc wouldn't be mounted until init mount it.)
+
+This tests perform all tests on `tests/data/qemu` directory with init
+with ASAN, checking for memory issues. If any is found, this
+check should fail and show ASAN output on `qemu-tests.log`.
+
+To run these tests, first ensure that init is compiled with address
+sanitizer support, running `make init-asan`, then, to executed the
+tests, run `make run-asan-tests`.
+
+Note that an abrupt end of init - like calling `reboot` - doesn't give
+a chance to ASAN output its data. To easily allow that and to keep
+consistency with behaviour when running under Valgrind, init doesn't
+call `reboot` if compiled with address sanitizer. So it will end up
+running all clean up code and exit with exit code 1 (`EXIT_FAILURE`),
+just like when init runs under Valgrind.
+
+This test expect that AddressSanitizer libraires are available on
+target image - rootfs.ext2.
+
+Container being used for tests is systemd-nspawn (minimum
+systemd-version: 233)
+[https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html].
+Note that to run the container, root permissions are necessary.

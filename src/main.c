@@ -701,9 +701,14 @@ static void do_reboot(int cmd)
 	sync();
 #endif
 
+	/* Reboot is not caught by address sanitizer, so let's
+	 * simply exit application. This is akin to Valgrind
+	 * behaviour, as `reboot` fails and init simply exits */
+#ifndef __SANITIZE_ADDRESS__
 	if (reboot(cmd) < 0) {
 		log_message("Reboot command failed: %m\n");
 	}
+#endif
 }
 
 static bool disable_sysrq(void)

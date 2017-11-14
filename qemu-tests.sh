@@ -24,6 +24,9 @@ LOG_CONTAINER=
 
 RUNNING_COVERAGE=false
 CHECK_VALGRIND=false
+CHECK_ASAN=false
+
+ASAN_EXIT_ERROR=129
 
 function log_message() {
     echo "$@" >> $LOG_FILE
@@ -53,6 +56,16 @@ function run_valgrind_container() {
           --bind=${LOG_INIT}:/dev/ttyS1 \
           -q \
           /usr/bin/valgrind --leak-check=full --show-leak-kinds=all /sbin/init 2>&1)
+}
+
+function run_asan_container() {
+    LOG_INIT=$1
+    LOG_CONTAINER=$(sudo timeout -s KILL --foreground ${EXEC_TIMEOUT} \
+        systemd-nspawn -i $QEMUDIR/$ROOT_FS \
+          --bind=${LOG_INIT}:/dev/ttyS1 \
+          -q \
+          -E ASAN_OPTIONS=replace_str=1,detect_invalid_pointer_pairs=2,intercept_strlen=1,exitcode=${ASAN_EXIT_ERROR},verbosity=2 \
+          /sbin/init 2>&1)
 }
 
 function mount_test_fs() {
@@ -236,6 +249,35 @@ function inspect_valgrind() {
     return $RESULT
 }
 
+function inspect_asan() {
+    INITTAB=$1
+    ASAN_EXITCODE=$2
+    RESULT=0
+
+    log_message "-------------------------------------------------------------"
+    log_message "Inspecting ASAN output for $INITTAB"
+    log_message "-------------------------------------------------------------"
+
+    # Normal exitcode when running ASAN is 1 - any other exitcode
+    # means error, not only ASAN_EXIT_ERROR. Even 0 - it means that
+    # ASAN didn't run at all. With ASAN enabled, reboot() never happens
+    # so init exits with 1.
+    if [ "$ASAN_EXITCODE" -ne 1 ]; then
+        RESULT=1
+        log_message ""
+        log_message "ASAN check not clean. Details below:"
+        log_message "-------------------------------------------------------------"
+        log_message "$LOG_CONTAINER"
+    else
+        log_message "ASAN check OK"
+    fi
+
+    log_message "-------------------------------------------------------------"
+    log_message ""
+
+    return $RESULT
+}
+
 function run_valgrind_test() {
     INITTAB=$1
 
@@ -249,6 +291,22 @@ function run_valgrind_test() {
 
     run_valgrind_container $TMPFILE
     inspect_valgrind $INITTAB
+    return $?
+}
+
+function run_asan_test() {
+    INITTAB=$1
+
+    echo "Testing inittab $INITTAB with ASAN"
+
+    mount_test_fs $ROOT_FS
+    update_inittab $INITTAB
+    umount_test_fs
+
+    TMPFILE=$(mktemp)
+
+    run_asan_container $TMPFILE
+    inspect_asan $INITTAB $?
     return $?
 }
 
@@ -293,10 +351,14 @@ if [ "$1" = "--extract-coverage-information" ]; then
     RUNNING_COVERAGE=true
 elif [ "$1" = "--run-and-check-valgrind" ]; then
     CHECK_VALGRIND=true
+elif [ "$1" = "--check-asan" ]; then
+    CHECK_ASAN=true
 fi
 
 if [ "$CHECK_VALGRIND" = true ]; then
     run_tests run_valgrind_test
+elif [ "$CHECK_ASAN" = true ]; then
+    run_tests run_asan_test
 else
     run_tests run_ordinary_test
 fi
