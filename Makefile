@@ -78,7 +78,7 @@ coverage:
 	$(MAKE) CFLAGS="$(CFLAGS_COVERAGE)" LDFLAGS="$(LDFLAGS_COVERAGE)"
 
 .PHONY:
-run-qemu-tests-coverage: coverage $(AUX_QEMU_TESTS)
+run-qemu-tests-coverage: clean coverage $(AUX_QEMU_TESTS)
 	./qemu-tests.sh --extract-coverage-information
 	lcov -d . -c -o lcov.info
 	genhtml lcov.info --output-directory lcov-out
