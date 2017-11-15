@@ -118,9 +118,8 @@ static void run_exec(const char *command)
 	__gcov_flush();
 #endif
 	/* should run the new process using a bash ? */
-	/* Should configure ENV ? */
 	errno = 0;
-	if (execl("/bin/sh", "/bin/sh", "-c", command, NULL) < 0) {
+	if (execle("/bin/sh", "/bin/sh", "-c", command, NULL, NULL) < 0) {
 		log_message("Could not exec process: %m\n");
 	}
 }
