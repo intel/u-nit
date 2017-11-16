@@ -80,8 +80,8 @@ coverage:
 .PHONY:
 run-qemu-tests-coverage: clean coverage $(AUX_QEMU_TESTS)
 	./qemu-tests.sh --extract-coverage-information
-	lcov -d . -c -o lcov.info
-	genhtml lcov.info --output-directory lcov-out
+	lcov -d . -c -o lcov.info  --rc lcov_branch_coverage=1
+	genhtml lcov.info --output-directory lcov-out --branch-coverage
 	xdg-open lcov-out/index.html
 
 .PHONY:
