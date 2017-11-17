@@ -790,12 +790,12 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
-	if (!read_inittab(INITTAB_FILENAME, &inittab_entries)) {
+	(void)umask(0);
+
+	if (!mount_mount_filesystems()) {
 		result = EXIT_FAILURE;
 		goto end;
 	}
-
-	(void)umask(0);
 
 	/* Ensure init will not block any umount call later */
 	r = chdir("/");
@@ -816,11 +816,6 @@ int main(int argc, char *argv[])
 	/* Become a session leader. Only reason to fail is if we already
 	 * are session leader - in a container, for instance */
 	(void)setsid();
-
-	if (!mount_mount_filesystems()) {
-		result = EXIT_FAILURE;
-		goto end;
-	}
 
 	/* Block signals that should only be caught by epoll */
 	setup_signals(&mask);
@@ -856,6 +851,11 @@ int main(int argc, char *argv[])
 	}
 
 	start_watchdog();
+
+	if (!read_inittab(INITTAB_FILENAME, &inittab_entries)) {
+		result = EXIT_FAILURE;
+		goto end;
+	}
 
 	/* Start initial list of process */
 	current_stage = STAGE_STARTUP;
