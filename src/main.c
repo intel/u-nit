@@ -239,21 +239,25 @@ static bool setup_stty(const char *terminal)
 
 	tty = open_console(terminal, O_RDWR | O_NOCTTY | O_CLOEXEC);
 	if (tty == -1) {
+		log_message("Could not open terminal for child process\n");
 		goto err_open;
 	}
 
 	r = dup2(tty, STDIN_FILENO);
 	if (r == -1) {
+		log_message("Could not dup terminal for STDIN: %m\n");
 		goto err_dup_in;
 	}
 
 	r = dup2(tty, STDOUT_FILENO);
 	if (r == -1) {
+		log_message("Could not dup terminal for STDOUT: %m\n");
 		goto err_dup_out;
 	}
 
 	r = dup2(tty, STDERR_FILENO);
 	if (r == -1) {
+		log_message("Could not dup terminal for STDERR: %m\n");
 		goto err_dup_errno;
 	}
 
