@@ -116,6 +116,7 @@ static void run_exec(const char *command)
 {
 #ifdef COMPILING_COVERAGE
 	__gcov_flush();
+	sync();
 #endif
 	/* should run the new process using a bash ? */
 	errno = 0;
@@ -386,6 +387,11 @@ static pid_t spawn_exec(const char *command, const char *console)
 
 	/* child code, should never return */
 	setup_child(command, console);
+
+#ifdef COMPILING_COVERAGE
+	__gcov_flush();
+	sync();
+#endif
 
 	/* If returned, we have a lost process */
 	_exit(1);
