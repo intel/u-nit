@@ -688,10 +688,8 @@ static void signal_handler(struct signalfd_siginfo *info)
 	}
 }
 
-static bool do_reboot(int cmd)
+static void do_reboot(int cmd)
 {
-	bool result = true;
-
 	/* Umount fs */
 	sync(); /* Ensure fs are synced */
 	mount_umount_filesystems();
@@ -702,12 +700,10 @@ static bool do_reboot(int cmd)
 	__gcov_flush();
 	sync();
 #endif
+
 	if (reboot(cmd) < 0) {
 		log_message("Reboot command failed: %m\n");
-		result = false;
 	}
-
-	return result;
 }
 
 static bool disable_sysrq(void)
@@ -777,12 +773,12 @@ int main(int argc, char *argv[])
 
 	if (getpid() != 1) {
 		result = EXIT_FAILURE;
-		goto err;
+		goto end;
 	}
 
 	if (!read_inittab(INITTAB_FILENAME, &inittab_entries)) {
 		result = EXIT_FAILURE;
-		goto err;
+		goto end;
 	}
 
 	(void)umask(0);
@@ -853,23 +849,28 @@ int main(int argc, char *argv[])
 
 	mainloop_start();
 
-	if (!do_reboot(shutdown_command)) {
-		result = EXIT_FAILURE;
-		goto end;
-	}
-
-end:
-
 	free_process_list(&running_processes);
 
 	free_inittab_entry_list(inittab_entries.startup_list);
 	free_inittab_entry_list(inittab_entries.shutdown_list);
 	free_inittab_entry_list(inittab_entries.safe_mode_entry);
 
+end:
+
 	if (msh != NULL) {
 		mainloop_remove_signal_handler(msh);
 	}
 
-err:
+	if (result != EXIT_FAILURE) {
+		do_reboot(shutdown_command);
+		/* If we are here, reboot failed */
+		result = EXIT_FAILURE;
+	}
+
+#ifdef COMPILING_COVERAGE
+	__gcov_flush();
+	sync();
+#endif
+
 	return result;
 }
