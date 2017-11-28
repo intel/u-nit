@@ -111,6 +111,32 @@ function inspect() {
     log_message "Inspecting log $LOG using $INSPECT for $INITTAB"
     log_message "-------------------------------------------------------------"
 
+    # Tests named as 'fail-*' should not be inspected. They should fail
+    # and panic, but they must have the right exit code.
+    case $INITTAB in
+        $TESTDIR/qemu/fail-*)
+        KERNEL_PANIC=$(echo "$LOG_QEMU" | grep "Kernel panic")
+        echo "$KERNEL_PANIC" | grep "$KERNEL_PANIC_OK" &> /dev/null
+        if [ $QEMU_EXITCODE -ne 124 -o $? -ne 0 ]; then
+            RESULT=1
+            log_message "QEMU_EXITCODE $QEMU_EXITCODE"
+            log_message "Unexpected exit code for failure test. QEMU output copied below:"
+            log_message "-------------------------------------------------------------"
+            log_message "$LOG_QEMU"
+            log_message "-------------------------------------------------------------"
+            log_message ""
+            log_message "init log:"
+            log_message "-------------------------------------------------------------"
+            log_message "$(cat "$LOG")"
+        else
+            log_message "Failure test OK"
+        fi
+
+        log_message "-------------------------------------------------------------"
+        return $RESULT
+        ;;
+    esac
+
     # Clean variables that maybe set (or not) on $INSPECT
     EXPECT_IN_ORDER=()
     EXPECT=()

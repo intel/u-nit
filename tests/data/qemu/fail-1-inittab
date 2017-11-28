@@ -1,0 +1,17 @@
+1:2:<one-shot>:/dev/tty1:/usr/bin/foo --bar baz
+4:0:<safe-one-shot>:/dev/console:/usr/bin/bar --baz foo
+
+# Ok comment
+
+//Nok comment
+
+::<safer-service>::/usr/bin/baz --bar foo
+:::/blah
+::<safe-mode>::/usr/bin/baz --bar foo
+::::
+::
+-1::<safe-service>::/usr/bin/baz --bar foo
+0xf::<safe-service>::/usr/bin/baz --bar foo
+ # No trim?
+::<safe-service>::/usr/bin/baz --bar foo
+::<safe-service>:/usr/bin/baz --bar foo
