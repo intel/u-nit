@@ -1,0 +1,17 @@
+1::<one-shot>::/usr/bin/sleep_test A 1
+1::<one-shot>::/usr/bin/sleep_test B 1
+2::<one-shot>::/usr/bin/sleep_test C 1
+
+# Next process should not exist
+2::<service>::/usr/bin/unexisting
+3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test A"
+3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test B"
+3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test C"
+4::<one-shot>::/usr/bin/kill -s USR2 1
+1::<shutdown>::/usr/bin/sleep_test E 1
+1::<shutdown>::/usr/bin/sleep_test F 1
+2::<shutdown>::/usr/bin/sleep_test G 1
+2::<safe-mode>::/usr/bin/true
+
+# A terminal
+1::<service>:/dev/console:/usr/bin/bash
