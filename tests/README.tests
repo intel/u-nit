@@ -75,12 +75,23 @@ this test needs root permissions. To run it, simply run
 `make run-qemu-tests`.
 If some test fails, check `qemu-tests.log` file to see what happened.
 
-Coverage information of QEMU tests can also be extracted: run
-`make run-qemu-tests-coverage`. This will compile init with coverage
-support (`make coverage`), run the tests using QEMU, extract the
-coverage information and run `lcov`
-(http://ltp.sourceforge.net/coverage/lcov.php) to get a nice view of
-coverage. It should open the browser to show coverage information.
+Coverage information
+
+Coverage information of QEMU tests can also be extracted. GCC gcov
+is used to get this information. First step is to use `make coverage`
+to compile init with coverage instrumentation enabled.
+
+Then, run tests normally (`make run-qemu-test` or `make run-qemu-fault`,
+for instance).
+
+Finally, extract coverage information using `make extract-coverage`
+(this will need sudo to get info from inside target image). This step
+also uses `lcov` (http://ltp.sourceforge.net/coverage/lcov.php) to
+make a nice html report of the coverage. To see the report, call
+`make show-coverage-report` to open the browser with it.
+
+After using report, to delete coverage information gathered, to run
+a new set of tests, use `make clean-coverage`.
 
 Valgrind testing
 
@@ -140,3 +151,35 @@ Container being used for tests is systemd-nspawn (minimum
 systemd-version: 233)
 [https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html].
 Note that to run the container, root permissions are necessary.
+
+Fault injection
+
+Runs init, injecting faults on some library calls, like `calloc` or
+`epoll_wait`. Uses libfiu (https://blitiri.com.ar/p/libfiu/) library
+to inject the fails.
+
+Failures are defined on `tests/data/qemu/fault-definitions` file. This
+file has the set of functions that will fail, defined in the format
+expected by libfiu. Note that several tests are defined there and each
+test may define several functions to fail. A test is everything defined
+between `""`. To have more than on function failing per test, new
+functions need to be on next line, but still inside the same quotes. For
+instance:
+
+    "enable_random name=linux/io/dup2,probability=0.2
+enable_random name=linux/io/timerfd_create,probability=0.2"
+
+Defines a single test, in which both `dup2` and `timerfd_create`
+may fail with a probality of 20%.
+
+Each test is run against all tests defined on `tests/data/qemu`. As
+tests are non deterministic - since they will fail at random, given
+specified probability - each test is run five times. This is so that
+it's possible to inject faults on a function that is used in different
+parts of init (so we don't always fault on the first `calloc`, for
+instance).
+
+To run fault injection tests, simply run `make run-qemu-fault`. Note
+that these tests can take very long time. They are a nice way to
+expand coverage of tests - since will help test error handling code -
+so make sure to run them with coverage enabled and extract coverage.

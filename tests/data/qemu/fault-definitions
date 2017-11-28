@@ -1,0 +1,15 @@
+FAULTS=(
+    "enable_random name=posix/misc/dup2,probability=0.2
+enable_random name=linux/epoll/timerfd_create,probability=0.2"
+    "enable_random name=linux/epoll/signalfd,probability=0.2"
+    "enable_random name=posix/io/oc/open,probability=0.2"
+    "enable name=linux/misc/reboot"
+    "enable_random name=linux/epoll/epoll_ctl,probability=0.2
+enable_random name=linux/epoll/epoll_wait,probability=0.2
+enable_random name=linux/epoll/epoll_create1,probability=0.2"
+    "enable_random name=linux/fs/mount,probability=0.2"
+    "enable_random name=libc/mm/calloc,probability=0.2"
+    "enable_random name=posix/proc/fork,probability=0.2
+enable_random name=posix/proc/kill,probability=0.2
+enable_random name=posix/proc/waitpid,probability=0.2"
+)

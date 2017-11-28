@@ -6,6 +6,7 @@
 TESTDIR=tests/data
 QEMUDIR=tests/init-qemu
 SRCDIR=src
+FAULT_DEFINITIONS=$TESTDIR/qemu/fault-definitions
 
 LOG_FILE=qemu-tests.log
 
@@ -22,11 +23,23 @@ EXEC_TIMEOUT=60
 LOG_QEMU=
 LOG_CONTAINER=
 
-RUNNING_COVERAGE=false
+EXTRACT_COVERAGE=false
+CLEAN_COVERAGE=false
 CHECK_VALGRIND=false
 CHECK_ASAN=false
+CHECK_ORDINARY=false
+FAULT_INJECTION=false
+
+DO_SETUP=false
 
 ASAN_EXIT_ERROR=129
+
+DEFAULT_KERNEL_CMDLINE="root=/dev/sda rw console=ttyS0 iip=dhcp"
+DEFAULT_FAULT_INJECTION_REPEATS=5
+
+LIBFIU_PRELOAD="LD_PRELOAD=\"/usr/lib/fiu_run_preload.so /usr/lib/fiu_posix_preload.so\""
+
+KERNEL_PANIC_OK="Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000100"
 
 function log_message() {
     echo "$@" >> $LOG_FILE
@@ -34,6 +47,8 @@ function log_message() {
 
 function run_qemu() {
     LOG_INIT=$1
+    KERNEL_CMDLINE="$DEFAULT_KERNEL_CMDLINE $2"
+
     LOG_QEMU=$(timeout -s TERM --foreground ${EXEC_TIMEOUT}  \
         qemu-system-x86_64 -machine q35,kernel_irqchip=split -m 512M -enable-kvm \
           -smp 4 -device intel-iommu,intremap=on,x-buggy-eim=on \
@@ -43,7 +58,7 @@ function run_qemu() {
           -hdb $QEMUDIR/$GCOV_FS \
           -serial mon:stdio \
           -chardev file,id=char0,path=${LOG_INIT} -serial chardev:char0 \
-          -append "root=/dev/sda rw console=ttyS0 iip=dhcp" \
+          -append "$KERNEL_CMDLINE" \
           -netdev user,id=net -device e1000e,addr=2.0,netdev=net \
           -device ib700,id=watchdog0 \
           -device intel-hda,addr=1b.0 -nographic -device hda-duplex 2>&1)
@@ -88,12 +103,6 @@ function setup_environment() {
     sudo cp $IS_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_NOT_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     umount_test_fs
-
-    if [ "$RUNNING_COVERAGE" = true ]; then
-        mount_test_fs $GCOV_FS
-        sudo rm -rf $QEMUDIR/mnt/src
-        umount_test_fs
-    fi
 }
 
 function update_inittab() {
@@ -304,6 +313,73 @@ function inspect_asan() {
     return $RESULT
 }
 
+function inspect_fault_injection() {
+    LOG=$1
+    QEMU_EXITCODE=$2
+    FAULT=$3
+    INITTAB=$4
+    RESULT=0
+
+    # No need to inject faults on tests for specific faults
+    case $INITTAB in
+        $TESTDIR/qemu/fail-*)
+        return $RESULT
+        ;;
+    esac
+
+    log_message "-------------------------------------------------------------"
+    log_message "Inspecting fault injection output for $INITTAB"
+    log_message "Faults: $FAULT"
+    log_message "-------------------------------------------------------------"
+
+    # Kernel panics should be fine if init couldn't start or end, but
+    # only if init gracefuly exited with exit code 0x100 (EXIT_FAILURE).
+    # Segfaults, for instance, are errors.
+    KERNEL_PANIC=$(echo "$LOG_QEMU" | grep "Kernel panic")
+    if [ $? -eq 0 ]; then
+        echo "$KERNEL_PANIC" | grep "$KERNEL_PANIC_OK" &> /dev/null
+        if [ $? -ne 0 ]; then
+            log_message "FAIL: Unexpected cause for Kernel panic"
+            RESULT=1
+        fi
+    fi
+
+    # Timeout without kernel panic may indicate infinite loop,
+    # that timeout is too short or maybe init couldn't start process
+    # that shuts machine down. The last case should go once init has
+    # a safe mode well defined, until there, we'll treat as error,
+    # but with a WARNING message since it may be ok.
+    if [ -z "$KERNEL_PANIC" ]; then
+        if [ $QEMU_EXITCODE -eq 124 ]; then
+            log_message "WARNING: QEMU finished by timeout."
+            RESULT=1
+        elif [ $QEMU_EXITCODE -ne 0 ]; then
+            log_message "FAIL: QEMU exited abnormaly."
+            RESULT=1
+        fi
+    fi
+
+    if [ "$RESULT" -ne 0 ]; then
+        log_message ""
+        log_message "Fault injection test FAIL. QEMU log copied below: "
+        log_message "-------------------------------------------------------------"
+        log_message "$LOG_QEMU"
+        log_message "-------------------------------------------------------------"
+        log_message ""
+        log_message "init log:"
+        log_message "-------------------------------------------------------------"
+        log_message "$(cat "$LOG")"
+        log_message "-------------------------------------------------------------"
+    else
+        log_message "Fault injection test OK"
+    fi
+
+    log_message "-------------------------------------------------------------"
+    log_message ""
+
+    return $RESULT
+}
+
 function run_valgrind_test() {
     INITTAB=$1
 
@@ -336,13 +412,37 @@ function run_asan_test() {
     return $?
 }
 
+function run_fault_injection_test() {
+    INITTAB=$1
+    FAIL=0
+
+    echo "Testing inittab $INITTAB with fault injection"
+
+    mount_test_fs $ROOT_FS
+    update_inittab $INITTAB
+    umount_test_fs
+
+    source $FAULT_DEFINITIONS
+    for i in $(seq 1 $FAULT_INJECTION_REPEATS); do
+        for FAULT in "${FAULTS[@]}"; do
+            TMPFILE=$(mktemp -u)
+
+            echo "  Testing with fault: $FAULT"
+
+            run_qemu $TMPFILE "$LIBFIU_PRELOAD FIU_ENABLE=\"$FAULT\""
+            inspect_fault_injection $TMPFILE $? "$FAULT" $INITTAB
+            if [ $? -eq 1 ]; then
+                FAIL=1
+            fi
+        done
+    done
+
+    return $FAIL
+}
+
 function run_tests() {
     ERRORS_FOUND=0
     RUN_TEST=$1
-
-    echo "Setting environment up"
-    setup_environment
-    truncate -s 0 $LOG_FILE
 
     echo "Running tests..."
     TESTS=$(ls $TESTDIR/qemu/*-inittab)
@@ -367,28 +467,85 @@ function extract_coverage_information() {
     echo "Extracting coverage information..."
     mount_test_fs $GCOV_FS
 
+    # TODO during fault injection tests, mount may fail.
+    # This can prevent 'gcov' partition from being mounted on target.
+    # When this happens, gcov info will live on '/gcov/src' inside
+    # rootfs.ext2. Ideally, we should merge them when generating
+    # coverage report
     cp $QEMUDIR/mnt/src/*.gcda $SRCDIR
 
     umount_test_fs
 }
 
-# TODO this can be a getopt
-if [ "$1" = "--extract-coverage-information" ]; then
-    RUNNING_COVERAGE=true
-elif [ "$1" = "--run-and-check-valgrind" ]; then
-    CHECK_VALGRIND=true
-elif [ "$1" = "--check-asan" ]; then
-    CHECK_ASAN=true
+function clean_coverage_information() {
+    mount_test_fs $GCOV_FS
+    sudo rm -rf $QEMUDIR/mnt/src
+    umount_test_fs
+}
+
+for i in "$@"; do
+    case $i in
+        --extract-coverage-information)
+            EXTRACT_COVERAGE=true
+            shift
+            ;;
+        --clean-coverage-information)
+            CLEAN_COVERAGE=true
+            shift
+            ;;
+        valgrind)
+            CHECK_VALGRIND=true
+            DO_SETUP=true
+            shift
+            ;;
+        asan)
+            CHECK_ASAN=true
+            DO_SETUP=true
+            shift
+            ;;
+        ordinary)
+            CHECK_ORDINARY=true
+            DO_SETUP=true
+            shift
+            ;;
+        fault-injection)
+            FAULT_INJECTION=true
+            DO_SETUP=true
+            shift
+            ;;
+        *)
+            echo "Unknown option \"$i\""
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$DO_SETUP" = true ]; then
+    echo "Setting environment up"
+    setup_environment
+    truncate -s 0 $LOG_FILE
+fi
+
+if [ "$CHECK_ORDINARY" = true ]; then
+    run_tests run_ordinary_test
 fi
 
 if [ "$CHECK_VALGRIND" = true ]; then
     run_tests run_valgrind_test
-elif [ "$CHECK_ASAN" = true ]; then
-    run_tests run_asan_test
-else
-    run_tests run_ordinary_test
 fi
 
-if [ "$RUNNING_COVERAGE" = true ]; then
+if [ "$CHECK_ASAN" = true ]; then
+    run_tests run_asan_test
+fi
+
+if [ "$FAULT_INJECTION" = true ]; then
+    run_tests run_fault_injection_test
+fi
+
+if [ "$EXTRACT_COVERAGE" = true ]; then
     extract_coverage_information
+fi
+
+if [ "$CLEAN_COVERAGE" = true ]; then
+    clean_coverage_information
 fi

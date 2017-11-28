@@ -42,10 +42,6 @@ AUX_QEMU_TESTS=tests/sleep_crash_test tests/sleep_test
 init: $(OBJS)
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-.PHONY:
-init-asan:
-	$(MAKE) CFLAGS="$(CFLAGS_ASAN)" LDFLAGS="$(LDFLAGS_ASAN)"
-
 clean:
 	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS) $(AUX_QEMU_TESTS) $(GCOV_GCNO) $(GCOV_GCDA) $(LCOV_FILES)
 
@@ -70,28 +66,43 @@ tests/sleep_test: tests/sleep_test.c
 	$(CC) $(CFLAGS) $< -o $@
 
 .PHONY:
-run-qemu-tests: init $(AUX_QEMU_TESTS)
-	./qemu-tests.sh
-
-.PHONY:
-coverage:
-	$(MAKE) CFLAGS="$(CFLAGS_COVERAGE)" LDFLAGS="$(LDFLAGS_COVERAGE)"
-
-.PHONY:
-run-qemu-tests-coverage: clean coverage $(AUX_QEMU_TESTS)
-	./qemu-tests.sh --extract-coverage-information
-	lcov -d . -c -o lcov.info  --rc lcov_branch_coverage=1
-	genhtml lcov.info --output-directory lcov-out --branch-coverage
-	xdg-open lcov-out/index.html
-
-.PHONY:
 format-code:
 	clang-format -i -style=file src/*.c src/*.h
 
 .PHONY:
-run-valgrind-tests: init $(AUX_QEMU_TESTS)
-	./qemu-tests.sh --run-and-check-valgrind
+coverage: clean
+	$(MAKE) CFLAGS="$(CFLAGS_COVERAGE)" LDFLAGS="$(LDFLAGS_COVERAGE)"
 
 .PHONY:
-run-asan-tests: clean init-asan $(AUX_QEMU_TESTS)
-	./qemu-tests.sh --check-asan
+init-asan:
+	$(MAKE) CFLAGS="$(CFLAGS_ASAN)" LDFLAGS="$(LDFLAGS_ASAN)"
+
+.PHONY:
+run-qemu-tests: $(AUX_QEMU_TESTS)
+	./qemu-tests.sh ordinary
+
+.PHONY:
+run-qemu-fault: $(AUX_QEMU_TESTS)
+	./qemu-tests.sh fault-injection
+
+.PHONY:
+run-valgrind-tests: $(AUX_QEMU_TESTS)
+	./qemu-tests.sh valgrind
+
+.PHONY:
+run-asan-tests: $(AUX_QEMU_TESTS)
+	./qemu-tests.sh asan
+
+.PHONY:
+extract-coverage:
+	./qemu-tests.sh --extract-coverage-information
+	lcov -d . -c -o lcov.info  --rc lcov_branch_coverage=1
+	genhtml lcov.info --output-directory lcov-out --branch-coverage
+
+.PHONY:
+show-coverage-report:
+	xdg-open lcov-out/index.html
+
+.PHONY:
+clean-coverage:
+	./qemu-tests.sh --clean-coverage-information
