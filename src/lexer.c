@@ -36,14 +36,14 @@ enum token_result next_token(struct lexer_data *lexer, char **token, char delim)
 		 * one */
 		ret = TOKEN_BLANK;
 	} else if (lexer->pos >= lexer->size) {
-		/* No token and buffer finished - raise error */
-		ret = TOKEN_ERROR;
+		/* No token and buffer finished - end of tokens */
+		ret = TOKEN_END;
 	} else {
 		/* Delimiter or '\0' was found. Happiness */
 		ret = TOKEN_OK;
 	}
 
-	if (ret != TOKEN_ERROR) {
+	if (ret != TOKEN_END) {
 		/* Adjust delimiter to '\0', so token returned ends properly */
 		lexer->buf[lexer->pos] = '\0';
 		*token = &lexer->buf[start_pos];

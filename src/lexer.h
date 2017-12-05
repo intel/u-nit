@@ -12,7 +12,7 @@
 #define LINE_SIZE 4095
 #define BUFFER_LEN LINE_SIZE + 1
 
-enum token_result { TOKEN_OK, TOKEN_BLANK, TOKEN_ERROR };
+enum token_result { TOKEN_OK, TOKEN_BLANK, TOKEN_END };
 enum next_line_result {
 	NEXT_LINE_OK,
 	NEXT_LINE_TOO_BIG,

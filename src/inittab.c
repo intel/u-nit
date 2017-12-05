@@ -182,7 +182,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	tr = next_token(&lexer, &order_str, ':');
 	if (tr == TOKEN_BLANK) {
 		entry->order = -1;
-	} else if (tr == TOKEN_ERROR) {
+	} else if (tr == TOKEN_END) {
 		log_message("Invalid 'order' field on inittab entry\n");
 		result = RESULT_ERROR;
 		goto end;
@@ -203,7 +203,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	tr = next_token(&lexer, &core_id_str, ':');
 	if (tr == TOKEN_BLANK) {
 		entry->core_id = -1;
-	} else if (tr == TOKEN_ERROR) {
+	} else if (tr == TOKEN_END) {
 		log_message("Invalid 'core_id' field on inittab entry\n");
 		result = RESULT_ERROR;
 		goto end;
