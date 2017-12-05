@@ -54,13 +54,13 @@ enum token_result next_token(struct lexer_data *lexer, char **token, char delim,
 	if (quoting) {
 		/* Buffer finished without ending quote */
 		ret = TOKEN_UNFINISHED_QUOTE;
+	} else if (lexer->pos >= lexer->size) {
+		/* No token and buffer finished - end of tokens */
+		ret = TOKEN_END;
 	} else if (lexer->pos == start_pos) {
 		/* No content on token before next delimiter, so it's a blank
 		 * one */
 		ret = TOKEN_BLANK;
-	} else if (lexer->pos >= lexer->size) {
-		/* No token and buffer finished - end of tokens */
-		ret = TOKEN_END;
 	} else {
 		/* Delimiter or '\0' was found. Happiness */
 		ret = TOKEN_OK;
