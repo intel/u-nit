@@ -6,17 +6,17 @@ Unit test
 For inittab parser and generic lexer at this moment.
 
 To generate unit test executable, run `make tests`. It should generate
-`parser_test` and `lexer_test` executable - both must run with no
+`inittab_test` and `lexer_test` executable - both must run with no
 issues.
 
 Fuzzy testing
 
 American Fuzzy Lop (AFL) is run on a single executable, using
-`tests/data/parser` files as input for the fuzzy tool.
+`tests/data/parser/inittab` files as input for the fuzzy tool.
 
 To generate AFL ready executable, run `make tests`. It should generate
-`afl_parser_test` executable - that can be run with a command like
-`afl-fuzz -i tests/data -o fuzz-results/ ./afl_parser_test @@`.
+`afl_inittab_test` executable - that can be run with a command like
+`afl-fuzz -i tests/data -o fuzz-results/ ./afl_inittab_test @@`.
 See AFL documentation for more details.
 
 QEMU testing

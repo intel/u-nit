@@ -51,14 +51,14 @@ clean:
 install: init
 	install -D init "$(DESTDIR)/$(PREFIX)/init"
 
-TESTS = parser_test lexer_test
+TESTS = inittab_test lexer_test
 
-AFL_TESTS = afl_parser_test
+AFL_TESTS = afl_inittab_test
 
-parser_test: src/lexer.o src/log.o tests/parser_test.c
+inittab_test: src/lexer.o src/log.o tests/inittab_test.c
 	$(CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
 
-afl_parser_test: src/lexer.o src/log.o src/inittab.o tests/afl_parser_test.c
+afl_inittab_test: src/lexer.o src/log.o src/inittab.o tests/afl_inittab_test.c
 	$(AFL_CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
 
 lexer_test: src/lexer.o tests/lexer_test.c

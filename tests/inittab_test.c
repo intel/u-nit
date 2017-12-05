@@ -27,7 +27,7 @@ struct test_data {
 #define EXPECTED_END { .result = -1U, .entry = {} }
 
 static struct test_data parse_assorted_errors = {
-    .file_name = "tests/data/parser/parse_assorted_errors",
+    .file_name = "tests/data/parser/inittab/parse_assorted_errors",
     .expected_data = {
         {
             .result = RESULT_OK,
@@ -107,7 +107,7 @@ static struct test_data parse_assorted_errors = {
 };
 
 static struct test_data parse_ok = {
-    .file_name = "tests/data/parser/parse_ok",
+    .file_name = "tests/data/parser/inittab/parse_ok",
     .expected_data = {
         {
             .result = RESULT_OK,
@@ -183,7 +183,7 @@ static struct test_data parse_ok = {
 };
 
 static struct test_data parse_comment_too_big = {
-    .file_name = "tests/data/parser/parse_comment_too_big",
+    .file_name = "tests/data/parser/inittab/parse_comment_too_big",
     .expected_data = {
         {
             .result = RESULT_ERROR,
@@ -198,7 +198,7 @@ static struct test_data parse_comment_too_big = {
 };
 
 static struct test_data parse_line_too_big = {
-    .file_name = "tests/data/parser/parse_line_too_big",
+    .file_name = "tests/data/parser/inittab/parse_line_too_big",
     .expected_data = {
         {
             .result = RESULT_OK,
@@ -267,7 +267,7 @@ static struct test_data parse_line_too_big = {
 };
 
 static struct test_data parse_empty = {
-    .file_name = "tests/data/parser/parse_empty",
+    .file_name = "tests/data/parser/inittab/parse_empty",
     .expected_data = {
         {
             .result = RESULT_DONE,
