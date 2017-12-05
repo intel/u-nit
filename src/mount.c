@@ -6,12 +6,14 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <mntent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 
+#include "lexer.h"
 #include "log.h"
 
 static const struct mount_table {
@@ -44,10 +46,170 @@ struct mount_point {
 	char *path;
 };
 
-bool mount_mount_filesystems(void)
+static bool add_option_flag(char *opt, unsigned long *flags)
 {
-	const struct mount_table *mnt;
+	static const struct {
+		const char *name;
+		unsigned long flag;
+		bool negated;
+	} options[] = {
+	    /* Should equal "rw,suid,dev,exec,auto,nouser,async" */
+	    {"defaults", MS_NOUSER, false},
+
+	    /* Handled options with a no* version (like dev and nodev) */
+	    {"ro", MS_RDONLY, false},
+	    {"rw", ~MS_RDONLY, true},
+	    {"noexec", MS_NOEXEC, false},
+	    {"exec", ~MS_NOEXEC, true},
+	    {"nodev", MS_NODEV, false},
+	    {"dev", ~MS_NODEV, true},
+	    {"nouser", MS_NOUSER, false},
+	    {"user", ~MS_NOUSER, true},
+	    {"relatime", MS_RELATIME, false},
+	    {"norelatime", ~MS_RELATIME, true},
+	    {"sync", MS_SYNCHRONOUS, false},
+	    {"async", ~MS_SYNCHRONOUS, true},
+	    {"silent", MS_SILENT, false},
+	    {"loud", ~MS_SILENT, true},
+	    {"noatime", MS_NOATIME, false},
+	    {"atime", ~MS_NOATIME, true},
+	    {"strictatime", MS_STRICTATIME, false},
+	    {"nostrictatime", ~MS_STRICTATIME, true},
+	    {"nosuid", MS_NOSUID, false},
+	    {"suid", ~MS_NOSUID, true},
+	    {"nodiratime", MS_NODIRATIME, false},
+	    {"diratime", ~MS_NODIRATIME, true},
+	    {"iversion", MS_I_VERSION, false},
+	    {"noiversion", ~MS_I_VERSION, true},
+	    {"mand", MS_MANDLOCK, false},
+	    {"nomand", ~MS_MANDLOCK, true},
+
+	    /* Options without negative counterparts */
+	    {"dirsync", MS_DIRSYNC, false},
+	    {"remount", MS_REMOUNT, false},
+
+	    /* Just to filter them out from mount(2) */
+	    {"nofail", 0, false},
+	};
+	int i;
+	bool result = false;
+
+	for (i = 0; i < ARRAY_SIZE(options); i++) {
+		if (strcmp(options[i].name, opt) == 0) {
+			if (options[i].negated) {
+				*flags &= options[i].flag;
+			} else {
+				*flags |= options[i].flag;
+			}
+			result = true;
+			break;
+		}
+	}
+
+	return result;
+}
+
+static bool add_uknown_option(char **unknow_opts, char *option)
+{
+	char *tmp = NULL;
+	bool result = false;
+
+	if (*unknow_opts == NULL) {
+		tmp = strdup(option);
+		result = tmp == NULL ? false : true;
+	} else {
+		/* TODO: check if we could go GNU_SOURCE and use asprintf */
+		/* +2 below: one for `,` and one for `\0` */
+		tmp = calloc(1, strlen(*unknow_opts) + strlen(option) + 2);
+		if (tmp != NULL) {
+			/* sprintf is fine as we know size of final string and
+			 * allocated for that */
+			int r = sprintf(tmp, "%s,%s", *unknow_opts, option);
+			result = r < 0 ? false : true;
+		}
+	}
+
+	if (result) {
+		free(*unknow_opts);
+		*unknow_opts = tmp;
+	}
+
+	return result;
+}
+
+static bool parse_fstab_mnt_options(const char *mnt_options,
+				    unsigned long *flags, char **unknow_opts)
+{
+	struct lexer_data lexer;
+	enum token_result tr;
+	char *dup_options = NULL;
+
+	assert(unknow_opts);
+	assert(flags);
+
+	*unknow_opts = NULL;
+
+	*flags = 0;
+
+	/* fstab(5) implies that options can't be empty */
+	if (mnt_options[0] == '\0') {
+		log_message(
+		    "Could not parse fstab: missing mount options field\n");
+		goto err;
+	}
+
+	/* As lexer destroys argument, send it a copy */
+	dup_options = strdup(mnt_options);
+	if (dup_options == NULL) {
+		log_message("Could not parse fstab: %m\n");
+		goto err;
+	}
+
+	init_lexer(&lexer, dup_options, strlen(dup_options) + 1);
+
+	while (true) {
+		char *opt = NULL;
+
+		tr = next_token(&lexer, &opt, ',', true);
+		if (tr == TOKEN_END) {
+			/* Ok, no more tokens */
+			break;
+		} else if (tr == TOKEN_OK) {
+			if (!add_option_flag(opt, flags)) {
+				/* This option is unknown. Let's add to the ones
+				 * sent to fs */
+				if (!add_uknown_option(unknow_opts, opt)) {
+					log_message(
+					    "Could not parse fstab: %m\n");
+					goto err;
+				}
+			}
+		} else if (tr == TOKEN_UNFINISHED_QUOTE) {
+			log_message(
+			    "Could not parse fstab: unfinished quote at '%s'\n",
+			    opt);
+			goto err;
+		} else {
+			/* TOKEN_BLANK, just ignore it */
+		}
+	}
+
+	free(dup_options);
+	return true;
+
+err:
+	free(*unknow_opts);
+	free(dup_options);
+
+	*unknow_opts = NULL;
+
+	return false;
+}
+
+static bool mount_system_filesystems(void)
+{
 	bool result = true;
+	const struct mount_table *mnt;
 
 	for (mnt = mount_table; mnt < mount_table + ARRAY_SIZE(mount_table);
 	     mnt++) {
@@ -93,6 +255,119 @@ bool mount_mount_filesystems(void)
 	}
 
 end:
+	return result;
+}
+
+static bool mount_fstab_filesystems(void)
+{
+	bool result = true;
+	struct mntent *ent;
+	char *unknow_opts = NULL;
+	FILE *fstab;
+
+	fstab = setmntent("/etc/fstab", "re");
+	if (fstab == NULL) {
+		log_message("Could not open fstab file. No user filesystem "
+			    "will be mounted!\n");
+		/* This is not necessarily a problem, hence no `result = false`
+		 */
+		goto end;
+	}
+
+	while (true) {
+		unsigned long flags = 0;
+		bool nofail = false;
+		int err;
+
+		errno = 0;
+		ent = getmntent(fstab);
+
+		if (!ent) {
+			/* No more entries. Just leave. */
+			break;
+		}
+
+		/* TODO should we care about swap partitions? */
+
+		if (hasmntopt(ent, "noauto")) {
+			/* We shall not mount it */
+			continue;
+		}
+
+		if (hasmntopt(ent, "nofail")) {
+			nofail = true;
+		}
+
+		if (!parse_fstab_mnt_options(ent->mnt_opts, &flags,
+					     &unknow_opts)) {
+			result = false;
+			goto err;
+		}
+
+		err = mkdir(ent->mnt_dir,
+			    S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+		if (err < 0) {
+			if ((errno != EEXIST)) {
+				log_message("Could not mkdir '%s': %m\n",
+					    ent->mnt_dir);
+				if (nofail) {
+					free(unknow_opts);
+					unknow_opts = NULL;
+					continue;
+				}
+
+				result = false;
+				goto err;
+			}
+		}
+
+		log_message("Mounting '%s' from '%s' to "
+			    "'%s', options='%s'\n",
+			    ent->mnt_type, ent->mnt_fsname, ent->mnt_dir,
+			    (ent->mnt_opts[0] != '\0') ? ent->mnt_opts
+						       : "(none)");
+		log_message("Parsed flags: %ld\nRemaining options: '%s'\n",
+			    flags, unknow_opts);
+		err = mount(ent->mnt_fsname, ent->mnt_dir, ent->mnt_type, flags,
+			    unknow_opts);
+		if (err < 0) {
+			log_message("Could not mount '%s' from '%s' to "
+				    "'%s', options='%s': %m\n",
+				    ent->mnt_type, ent->mnt_fsname,
+				    ent->mnt_dir,
+				    (ent->mnt_opts[0] != '\0') ? ent->mnt_opts
+							       : "(none)");
+
+			/* TODO check if nofail is ok for every fail reason */
+			if (nofail) {
+				free(unknow_opts);
+				unknow_opts = NULL;
+				continue;
+			}
+
+			result = false;
+			goto err;
+		}
+
+		free(unknow_opts);
+		unknow_opts = NULL;
+	}
+
+err:
+	free(unknow_opts);
+	(void)endmntent(fstab);
+end:
+	return result;
+}
+
+bool mount_mount_filesystems(void)
+{
+	bool result = true;
+
+	if (!mount_system_filesystems() || !mount_fstab_filesystems()) {
+		result = false;
+	}
+
 	return result;
 }
 
