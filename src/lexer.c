@@ -21,17 +21,40 @@ void init_lexer(struct lexer_data *lexer, char *buf, size_t size)
 	lexer->pos = 0U;
 };
 
-enum token_result next_token(struct lexer_data *lexer, char **token, char delim)
+enum token_result next_token(struct lexer_data *lexer, char **token, char delim,
+			     bool quoted)
 {
 	size_t start_pos = lexer->pos;
 	enum token_result ret;
+	bool quoting = false;
+	char quote = '\0';
 
-	while ((lexer->buf[lexer->pos] != delim) &&
-	       (lexer->buf[lexer->pos] != '\0') && (lexer->pos < lexer->size)) {
+	while ((lexer->pos < lexer->size) && (lexer->buf[lexer->pos] != '\0')) {
+		if (!quoting) {
+			if ((lexer->buf[lexer->pos] == delim)) {
+				/* Complete token */
+				break;
+			}
+
+			if (((lexer->buf[lexer->pos] == '\'') ||
+			     (lexer->buf[lexer->pos] == '\"')) &&
+			    quoted) {
+				quote = lexer->buf[lexer->pos];
+				quoting = true;
+			}
+		} else if (lexer->buf[lexer->pos] == quote) {
+			/* Finished quote */
+			quote = '\0';
+			quoting = false;
+		}
+
 		lexer->pos++;
 	}
 
-	if (lexer->pos == start_pos) {
+	if (quoting) {
+		/* Buffer finished without ending quote */
+		ret = TOKEN_UNFINISHED_QUOTE;
+	} else if (lexer->pos == start_pos) {
 		/* No content on token before next delimiter, so it's a blank
 		 * one */
 		ret = TOKEN_BLANK;
