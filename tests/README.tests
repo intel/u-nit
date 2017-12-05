@@ -1,13 +1,13 @@
 Testing init involves some different approaches, like unit testing and
-fuzzy (currently, for inittab parser only) or qemu testing.
+fuzzy or qemu testing.
 
 Unit test
 
-Only for inittab parser at this moment. Perform some tests for
-`inittab_parse_entry` function.
+For inittab parser and generic lexer at this moment.
 
 To generate unit test executable, run `make tests`. It should generate
-`parser_test` executable - which must run with no issues.
+`parser_test` and `lexer_test` executable - both must run with no
+issues.
 
 Fuzzy testing
 
