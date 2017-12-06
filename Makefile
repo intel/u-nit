@@ -51,7 +51,7 @@ clean:
 install: init
 	install -D init "$(DESTDIR)/$(PREFIX)/init"
 
-TESTS = inittab_test lexer_test
+TESTS = inittab_test lexer_test fstab_test
 
 AFL_TESTS = afl_inittab_test
 
@@ -62,6 +62,9 @@ afl_inittab_test: src/lexer.o src/log.o src/inittab.o tests/afl_inittab_test.c
 	$(AFL_CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
 
 lexer_test: src/lexer.o tests/lexer_test.c
+	$(CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
+
+fstab_test: src/lexer.o src/log.o tests/fstab_test.c
 	$(CC) $(TESTS_CFLAGS) $^ -o $@ $(LDFLAGS)
 
 tests: $(TESTS)

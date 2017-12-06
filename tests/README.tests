@@ -6,8 +6,8 @@ Unit test
 For inittab parser and generic lexer at this moment.
 
 To generate unit test executable, run `make tests`. It should generate
-`inittab_test` and `lexer_test` executable - both must run with no
-issues.
+`inittab_test`, `lexer_test` and `fstab_test` executables - all must run
+with no issues.
 
 Fuzzy testing
 
