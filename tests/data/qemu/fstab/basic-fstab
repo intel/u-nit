@@ -1,0 +1,2 @@
+/dev/sdc    /mnt/a  ext4    rw
+/dev/sdd    /mnt/b  ext4    ro

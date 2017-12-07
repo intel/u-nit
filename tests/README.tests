@@ -25,14 +25,17 @@ Runs init as PID 1 on a virtual environment using qemu. This virtual
 environment needs a kernel image and rootfs. Currently, script that
 perform this testing expects a directory `tests/init-qemu`, with files
 `bzImage` - kernel image, `rootfs.ext2` - the root file system of
-the environment and `gcov.ext4` - where coverage obtained by gcov is
-stored.
+the environment, `gcov.ext4` - where coverage obtained by gcov is
+stored and two empty filesystems, `test-fs.ext4` and `test-fs2.ext4`,
+used on fstab tests.
 
-Tests for qemu environment are defined using two files: XXX-inittab and
-XXX-inspect for each test XXX. These files live in `tests/data/qemu`
-directory. First file defines an inittab file, with all programs that
-should be run. Second one defines inspections to be done on init log
-file.
+Tests run on qemu focus on two aspects: inittab and fstab files.
+Inittab tests for qemu environment are defined using two files:
+XXX-inittab and XXX-inspect for each test XXX. These files live in
+`tests/data/qemu/inittab` directory. First file defines an inittab file,
+with all programs tha should be run. Second one defines inspections to
+be done on init log file. In this directory there's also a `default-fstab`
+file to be used on all inittab tests.
 
 The inittab file can use some helper executables to perform its tests.
 One is the `sleep_test`, which receives as command line arguments an
@@ -56,11 +59,16 @@ the regular expression must not match itself on `ps aux` output - or it
 would have wrong results, as it appears on it. A good way to achieve
 this is to start the regular expression with `[[]`.
 
+The fstab tests live on `tests/data/qemu/fstab`. As with inittab, they
+are divided into two categories: fstab files and inspect files, named
+XXX-fstab and XXX-inspect. Both are sent to virtual environment, former
+will be in `/etc/fstab` and later on `/usr/share/expected_mounts`.
+
 To start shutdown on virtual environment, add a `kill -s USR2 1` on
 inittab file, so init will perform shutdown steps.
 
-The inspect file runs some regular expressions on init log file. Note
-that log file also contains any output of programs started by init -
+The inittab inspect file runs some regular expressions on init log file.
+Note that log file also contains any output of programs started by init -
 except those that define a controlling terminal. For instance, on start,
 `sleep_test` prints `START: /usr/bin/sleep_test <string> <timeout>`.
 Regular expressions are defined on three bash arrays variables: EXPECT,
@@ -69,6 +77,22 @@ on the array on init log file, and expect that they appear on log,
 in the same order they defined on the array. The second simply expects
 that each expression appears on init log file, and the last doesn't
 expect them at all.
+
+The fstab inspect file basically lists expected mountpoints with
+expected options. These options should be in the same format and order
+returned by findmnt(8). To list options, use EXPECTED bash array
+variable. Each entry must be in the format `MNTPOINT:EXPECTED_OPTIONS`,
+like `/mnt/a:rw,relatime,data=ordered`. Another bash array variable
+available is UNEXPECTED, that checks if no MNTPOINT entry listed is
+actually mounted. For instance, entry `/mnt/b` checks if there's no
+`/mnt/b` mountpoint. Useful to test if `noauto` mount option is respected
+by init.
+
+Expected options are not automatically derived from fstab file because
+this would be a rather complex task, as there'snot a 1:1 mapping from
+the fstab options to the ones returned, since kernel version plays an
+important role on mount options interactions. For instance, `relatime`
+options is always defined unless `noatime` is.
 
 In order to mount the rootfs to send files to virtual environment,
 this test needs root permissions. To run it, simply run
@@ -121,6 +145,8 @@ Container being used for tests is systemd-nspawn (minimum
 systemd-version: 233)
 [https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html].
 Note that to run the container, root permissions are necessary.
+Also note that fstab tests are skipped on container environment - as
+there's no simple way to setup on container the expected device nodes.
 
 ASAN testing
 
@@ -151,6 +177,8 @@ Container being used for tests is systemd-nspawn (minimum
 systemd-version: 233)
 [https://www.freedesktop.org/software/systemd/man/systemd-nspawn.html].
 Note that to run the container, root permissions are necessary.
+Also note that fstab tests are skipped on container environment - as
+there's no simple way to setup on container the expected device nodes.
 
 Fault injection
 

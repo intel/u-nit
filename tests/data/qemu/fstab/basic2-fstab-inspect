@@ -1,0 +1,7 @@
+EXPECTED_MOUNTS=(
+    "/mnt/a:rw,nodelalloc,data=journal"
+)
+
+UNEXPECTED_MOUNTS=(
+    "/mnt/b"
+)

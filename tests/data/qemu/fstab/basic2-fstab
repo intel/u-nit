@@ -1,0 +1,2 @@
+/dev/sdc    /mnt/a  ext4    rw,noatime,strictatime,data=journal
+/dev/sde    /mnt/b  ext4    nofail

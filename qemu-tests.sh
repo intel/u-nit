@@ -15,9 +15,12 @@ SLEEP_TEST_EXEC=tests/sleep_test
 SLEEP_CRASH_TEST_EXEC=tests/sleep_crash_test
 IS_RUNNING_EXEC=tests/is_running
 IS_NOT_RUNNING_EXEC=tests/is_not_running
+INSPECT_MOUNT=tests/inspect-mount
 
 ROOT_FS=rootfs.ext2
 GCOV_FS=gcov.ext4
+TEST_FS_1=test-fs.ext4
+TEST_FS_2=test-fs2.ext4
 
 EXEC_TIMEOUT=60
 LOG_QEMU=
@@ -56,6 +59,8 @@ function run_qemu() {
           -cpu kvm64,-kvm_pv_eoi,-kvm_steal_time,-kvm_asyncpf,-kvmclock,+vmx \
           -hda $QEMUDIR/$ROOT_FS \
           -hdb $QEMUDIR/$GCOV_FS \
+          -hdc $QEMUDIR/$TEST_FS_1 \
+          -hdd $QEMUDIR/$TEST_FS_2 \
           -serial mon:stdio \
           -chardev file,id=char0,path=${LOG_INIT} -serial chardev:char0 \
           -append "$KERNEL_CMDLINE" \
@@ -102,6 +107,7 @@ function setup_environment() {
     sudo cp $SLEEP_CRASH_TEST_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_NOT_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
+    sudo cp $INSPECT_MOUNT $QEMUDIR/mnt/usr/bin/
     umount_test_fs
 }
 
@@ -109,21 +115,29 @@ function update_inittab() {
     sudo cp $1 $QEMUDIR/mnt/etc/inittab
 }
 
+function update_fstab() {
+    sudo cp $1 $QEMUDIR/mnt/etc/fstab
+
+    if [ -n "${1##$TESTDIR/qemu/*/fail-*}" ]; then
+        sudo cp "$1-inspect" $QEMUDIR/mnt/usr/share/expected_mounts
+    fi
+}
+
 function inspect() {
     INSPECT=$1
     LOG=$2
     INITTAB=$3
-    QEMU_EXITCODE=$4
+    FSTAB=$4
+    QEMU_EXITCODE=$5
     RESULT=0
 
     log_message "-------------------------------------------------------------"
-    log_message "Inspecting log $LOG using $INSPECT for $INITTAB"
+    log_message "Inspecting log $LOG using $INSPECT for $INITTAB and $FSTAB"
     log_message "-------------------------------------------------------------"
 
     # Tests named as 'fail-*' should not be inspected. They should fail
     # and panic, but they must have the right exit code.
-    case $INITTAB in
-        $TESTDIR/qemu/fail-*)
+    if [ -z "${INITTAB##$TESTDIR/qemu/*/fail-*}" -o -z "${FSTAB##$TESTDIR/qemu/*/fail-*}" ]; then
         KERNEL_PANIC=$(echo "$LOG_QEMU" | grep "Kernel panic")
         echo "$KERNEL_PANIC" | grep "$KERNEL_PANIC_OK" &> /dev/null
         if [ $QEMU_EXITCODE -ne 124 -o $? -ne 0 ]; then
@@ -143,8 +157,7 @@ function inspect() {
 
         log_message "-------------------------------------------------------------"
         return $RESULT
-        ;;
-    esac
+    fi
 
     # Clean variables that maybe set (or not) on $INSPECT
     EXPECT_IN_ORDER=()
@@ -243,28 +256,31 @@ function inspect() {
 
 function run_ordinary_test() {
     INITTAB=$1
-    INSPECT=${INITTAB/-inittab/-inspect}
+    FSTAB=$2
+    INSPECT="$INITTAB-inspect"
 
-    echo "Testing inittab $INITTAB"
+    echo "Testing inittab $INITTAB and $FSTAB"
 
     mount_test_fs $ROOT_FS
     update_inittab $INITTAB
+    update_fstab $FSTAB
     umount_test_fs
 
     TMPFILE=$(mktemp -u)
 
     run_qemu $TMPFILE
-    inspect $INSPECT $TMPFILE $INITTAB $?
+    inspect $INSPECT $TMPFILE $INITTAB $FSTAB $?
     return $?
 }
 
 function inspect_valgrind() {
     INITTAB=$1
+    FSTAB=$2
     RESULT=0
     VALGRIND_OK="==1== All heap blocks were freed -- no leaks are possible"
 
     log_message "-------------------------------------------------------------"
-    log_message "Inspecting valgrind output for $INITTAB"
+    log_message "Inspecting valgrind output for $INITTAB and $FSTAB"
     log_message "-------------------------------------------------------------"
 
     echo "$LOG_CONTAINER" | grep "$VALGRIND_OK" &> /dev/null
@@ -286,11 +302,12 @@ function inspect_valgrind() {
 
 function inspect_asan() {
     INITTAB=$1
-    ASAN_EXITCODE=$2
+    FSTAB=$2
+    ASAN_EXITCODE=$3
     RESULT=0
 
     log_message "-------------------------------------------------------------"
-    log_message "Inspecting ASAN output for $INITTAB"
+    log_message "Inspecting ASAN output for $INITTAB and $FSTAB"
     log_message "-------------------------------------------------------------"
 
     # Normal exitcode when running ASAN is 1 - any other exitcode
@@ -318,6 +335,7 @@ function inspect_fault_injection() {
     QEMU_EXITCODE=$2
     FAULT=$3
     INITTAB=$4
+    FSTAB=$5
     RESULT=0
 
     # No need to inject faults on tests for specific faults
@@ -328,7 +346,7 @@ function inspect_fault_injection() {
     esac
 
     log_message "-------------------------------------------------------------"
-    log_message "Inspecting fault injection output for $INITTAB"
+    log_message "Inspecting fault injection output for $INITTAB and $FSTAB"
     log_message "Faults: $FAULT"
     log_message "-------------------------------------------------------------"
 
@@ -382,44 +400,62 @@ function inspect_fault_injection() {
 
 function run_valgrind_test() {
     INITTAB=$1
+    FSTAB=$2
 
-    echo "Testing inittab $INITTAB with valgrind"
+    # FSTAB tests are (currently) not possible on container environment
+    # (Couldn't find an easy way to replace qemu -hdX on systemd-nspawn)
+    if [ "$INITTAB" == "$TESTDIR/qemu/fstab/default-inittab" ]; then
+        echo "Skiping FSTAB test on container ($FSTAB)"
+        return 0
+    fi
+    echo "Testing inittab $INITTAB and fstab $FSTAB with valgrind"
 
     mount_test_fs $ROOT_FS
     update_inittab $INITTAB
+    update_fstab $FSTAB
     umount_test_fs
 
     TMPFILE=$(mktemp)
 
     run_valgrind_container $TMPFILE
-    inspect_valgrind $INITTAB
+    inspect_valgrind $INITTAB $FSTAB
     return $?
 }
 
 function run_asan_test() {
     INITTAB=$1
+    FSTAB=$2
 
-    echo "Testing inittab $INITTAB with ASAN"
+    # FSTAB tests are (currently) not possible on container environment
+    # (Couldn't find an easy way to replace qemu -hdX on systemd-nspawn)
+    if [ "$INITTAB" == "$TESTDIR/qemu/fstab/default-inittab" ]; then
+        echo "Skiping FSTAB test on container ($FSTAB)"
+        return 0
+    fi
+    echo "Testing inittab $INITTAB and $FSTAB with ASAN"
 
     mount_test_fs $ROOT_FS
     update_inittab $INITTAB
+    update_fstab $FSTAB
     umount_test_fs
 
     TMPFILE=$(mktemp)
 
     run_asan_container $TMPFILE
-    inspect_asan $INITTAB $?
+    inspect_asan $INITTAB $FSTAB $?
     return $?
 }
 
 function run_fault_injection_test() {
     INITTAB=$1
+    FSTAB=$2
     FAIL=0
 
-    echo "Testing inittab $INITTAB with fault injection"
+    echo "Testing inittab $INITTAB and $FSTAB with fault injection"
 
     mount_test_fs $ROOT_FS
     update_inittab $INITTAB
+    update_fstab $FSTAB
     umount_test_fs
 
     source $FAULT_DEFINITIONS
@@ -430,7 +466,7 @@ function run_fault_injection_test() {
             echo "  Testing with fault: $FAULT"
 
             run_qemu $TMPFILE "$LIBFIU_PRELOAD FIU_ENABLE=\"$FAULT\""
-            inspect_fault_injection $TMPFILE $? "$FAULT" $INITTAB
+            inspect_fault_injection $TMPFILE $? "$FAULT" $INITTAB $FSTAB
             if [ $? -eq 1 ]; then
                 FAIL=1
             fi
@@ -445,9 +481,23 @@ function run_tests() {
     RUN_TEST=$1
 
     echo "Running tests..."
-    TESTS=$(ls $TESTDIR/qemu/*-inittab)
+    # First, run tests under $TESTDIR/qemu/inittab. Those
+    # tests target inittab, so there are many of them, for a single
+    # 'default-fstab'
+    TESTS=$(ls $TESTDIR/qemu/inittab/*-inittab)
     for TEST in $TESTS; do
-        $RUN_TEST $TEST
+        $RUN_TEST $TEST "$TESTDIR/qemu/inittab/default-fstab"
+        if [ $? -ne 0 ]; then
+            ERRORS_FOUND=1
+        fi
+    done
+
+    # Then, run tests under $TESTDIR/qemu/fstab. Those
+    # tests target fstab, so there are many of them, for a single
+    # 'default-inittab'
+    TESTS=$(ls $TESTDIR/qemu/fstab/*-fstab)
+    for TEST in $TESTS; do
+        $RUN_TEST "$TESTDIR/qemu/fstab/default-inittab" $TEST
         if [ $? -ne 0 ]; then
             ERRORS_FOUND=1
         fi

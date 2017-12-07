@@ -1,0 +1,42 @@
+#!/bin/bash
+
+SUCCESS=true
+
+EXPECTED=()
+UNEXPECTED=()
+
+source /usr/share/expected_mounts
+if [ $? -ne 0 ]; then
+    SUCCESS=false
+fi
+
+for EXPECTED in "${EXPECTED_MOUNTS[@]}"; do
+    MNT=$(echo "$EXPECTED" | cut -d ':' -f 1)
+    EXPECTED_OPTS=$(echo "$EXPECTED" | cut -d ':' -f 2)
+
+    ACTUAL_OPTS=$(findmnt -nl -M "$MNT" -o OPTIONS)
+    if [ $? -ne 0 ]; then
+        echo "INSPECT-MOUNT: Couldn't find '$MNT' on mount table."
+        SUCCESS=false
+    elif [ "$ACTUAL_OPTS" != "$EXPECTED_OPTS" ]; then
+        # TODO this check could account for things out of order
+        echo "INSPECT-MOUNT: Mismatch on options for '$MNT'."
+        echo "INSPECT-MOUNT:    Found '$ACTUAL_OPTS'"
+        echo "INSPECT-MOUNT:    Expected '$EXPECTED_OPTS'"
+        SUCCESS=false
+    fi
+done
+
+for UNEXPECTED in "${UNEXPECTED_MOUNTS[@]}"; do
+    $(findmnt -nl -M "$UNEXPECTED") &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "INSPECT-MOUNT: Found unexpected mount point '$UNEXPECTED'"
+        SUCCESS=false
+    fi
+done
+
+if [ "$SUCCESS" == true ]; then
+    echo "INSPECT-MOUNT: OK"
+else
+    echo "INSPECT-MOUNT: FAIL"
+fi

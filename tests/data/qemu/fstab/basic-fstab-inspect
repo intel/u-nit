@@ -1,0 +1,4 @@
+EXPECTED_MOUNTS=(
+    "/mnt/a:rw,relatime,data=ordered"
+    "/mnt/b:ro,relatime,data=ordered"
+)
