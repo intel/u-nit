@@ -520,8 +520,14 @@ static void stage_maintenance(void)
 	case STAGE_TERMINATION:
 		/* If all process finished, time to start 'shutdown' ones */
 		if (running_processes == NULL) {
-			current_stage = STAGE_SHUTDOWN;
-			start_processes(inittab_entries.shutdown_list);
+			if (inittab_entries.shutdown_list != NULL) {
+				current_stage = STAGE_SHUTDOWN;
+				start_processes(inittab_entries.shutdown_list);
+			} else {
+				/* Nothing to run on shutdown. Init is closing
+				 */
+				current_stage = STAGE_CLOSE;
+			}
 
 			/* Since all processes ended, no need for timer to kill
 			 * them anymore */
