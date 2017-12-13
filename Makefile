@@ -12,6 +12,9 @@ LDFLAGS_ASAN ?= $(LDFLAGS) -fsanitize=address
 
 TESTS_CFLAGS += $(CFLAGS) "-Isrc/"
 
+DESTDIR ?=
+PREFIX ?= "/usr/bin"
+
 ifeq ($(DEBUG),1)
 	CFLAGS += -g -O0
 endif
@@ -44,6 +47,9 @@ init: $(OBJS)
 
 clean:
 	rm -rf init $(OBJS) $(TESTS) $(AFL_TESTS) $(AUX_QEMU_TESTS) $(GCOV_GCNO) $(GCOV_GCDA) $(LCOV_FILES)
+
+install: init
+	install -D init "$(DESTDIR)/$(PREFIX)/init"
 
 TESTS = parser_test
 
