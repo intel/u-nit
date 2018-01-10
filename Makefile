@@ -31,6 +31,7 @@ SOURCE = \
 	src/main.c \
 	src/mainloop.c \
 	src/mount.c \
+	src/safe-mode.c \
 	src/watchdog.c
 
 OBJS = $(SOURCE:.c=.o)

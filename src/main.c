@@ -27,6 +27,7 @@
 #include "log.h"
 #include "mainloop.h"
 #include "mount.h"
+#include "safe-mode.h"
 #include "watchdog.h"
 
 #ifndef TIMEOUT_TERM
@@ -72,6 +73,8 @@ static enum stage current_stage;
 
 static struct mainloop_timeout *kill_timeout;
 static struct mainloop_timeout *one_shot_timeout;
+
+static int safe_mode_pipe_fd;
 
 static int shutdown_command = RB_AUTOBOOT; /* Is this a sensible default? */
 
@@ -155,6 +158,139 @@ static bool safe_dup(int *fd)
 
 end:
 	return result;
+}
+
+static bool setup_stdio(void)
+{
+	int null_fd, out_fd;
+
+	errno = 0;
+	null_fd = open("/dev/null", O_RDONLY | O_NOCTTY);
+	if (null_fd == -1) {
+		log_message("Could not open /dev/null: %m\n");
+		goto err_open_null;
+	}
+
+	if (!safe_dup(&null_fd)) {
+		goto err_safe_dup_null;
+	}
+
+	out_fd = log_fd();
+	if (out_fd == -1) {
+		log_message("Could not open logfile: %m\n");
+		goto err_open_out;
+	}
+
+	if (!safe_dup(&out_fd)) {
+		goto err_safe_dup_out;
+	}
+
+	if (dup2(null_fd, STDIN_FILENO) == -1) {
+		log_message("Could not dup null fd: %m\n");
+		goto err_dup_null;
+	}
+
+	if (dup2(out_fd, STDOUT_FILENO) == -1) {
+		log_message("Could not dup out fd: %m\n");
+		goto err_dup_out;
+	}
+
+	if (dup2(out_fd, STDERR_FILENO) == -1) {
+		log_message("Could not dup err fd: %m\n");
+		goto err_dup_err;
+	}
+
+	close(out_fd);
+	close(null_fd);
+
+	return true;
+
+err_dup_err:
+	close(STDOUT_FILENO);
+err_dup_out:
+	close(STDIN_FILENO);
+err_dup_null:
+err_safe_dup_out:
+	close(out_fd);
+err_open_out:
+err_safe_dup_null:
+	close(null_fd);
+err_open_null:
+	return false;
+}
+
+static bool setup_safe_mode(struct inittab_entry *entry)
+{
+	struct process *p;
+	int pipefd[2] = {0};
+
+	assert(entry != NULL);
+
+	/* If we are restarting safe-mode placeholder, we need to close previous
+	 * pipe */
+	if (safe_mode_pipe_fd > 0) {
+		(void)close(safe_mode_pipe_fd);
+	}
+
+	errno = 0;
+	if (pipe2(pipefd, O_CLOEXEC) < 0) {
+		log_message("Could not create pipe for safe mode placeholder "
+			    "process: %m\n");
+		goto error_pipe;
+	}
+
+	p = calloc(1, sizeof(struct process));
+	if (p == NULL) {
+		log_message(
+		    "Could not create create placeholder process: %m\n");
+		goto error_calloc;
+	}
+
+	errno = 0;
+	p->pid = fork();
+
+	if (p->pid < 0) {
+		log_message(
+		    "Could not fork safe mode placeholder process: %m\n");
+		goto error_fork;
+	} else if (p->pid > 0) {
+		memcpy(&p->config, entry, sizeof(struct inittab_entry));
+		p->next = running_processes;
+		running_processes = p;
+
+		(void)close(pipefd[0]); /* pid1 won't read from it */
+		safe_mode_pipe_fd = pipefd[1];
+
+		log_message("Safe mode placeholder process created, pid %d\n",
+			    p->pid);
+	} else {
+		/* p->pid == 0, this code runs on child, never returns */
+		free(p); /* Make static analysis happy! */
+
+		/* Dup pipefd[0] to avoid it being accidentaly closed on
+		 * setup_stdio() due it not being bigger than STDERR_FILENO */
+		if (!safe_dup(&pipefd[0]) || !setup_stdio()) {
+#ifdef COMPILING_COVERAGE
+			__gcov_flush();
+			sync();
+#endif
+			_exit(1);
+		}
+
+		(void)close(pipefd[1]); /* placeholder won't write to it */
+
+		safe_mode_wait(entry->process_name, pipefd[0]);
+	}
+
+	return true;
+
+error_fork:
+	free(p);
+error_calloc:
+	(void)close(pipefd[0]);
+	(void)close(pipefd[1]);
+error_pipe:
+	return false;
 }
 
 static void setup_signals(sigset_t *mask)
@@ -314,65 +450,6 @@ err_dup_out:
 err_dup_in:
 	(void)close(tty);
 err_open:
-	return false;
-}
-
-static bool setup_stdio(void)
-{
-	int null_fd, out_fd;
-
-	errno = 0;
-	null_fd = open("/dev/null", O_RDONLY | O_NOCTTY);
-	if (null_fd == -1) {
-		log_message("Could not open /dev/null: %m\n");
-		goto err_open_null;
-	}
-
-	if (!safe_dup(&null_fd)) {
-		goto err_safe_dup_null;
-	}
-
-	out_fd = log_fd();
-	if (out_fd == -1) {
-		log_message("Could not open logfile: %m\n");
-		goto err_open_out;
-	}
-
-	if (!safe_dup(&out_fd)) {
-		goto err_safe_dup_out;
-	}
-
-	if (dup2(null_fd, STDIN_FILENO) == -1) {
-		log_message("Could not dup null fd: %m\n");
-		goto err_dup_null;
-	}
-
-	if (dup2(out_fd, STDOUT_FILENO) == -1) {
-		log_message("Could not dup out fd: %m\n");
-		goto err_dup_out;
-	}
-
-	if (dup2(out_fd, STDERR_FILENO) == -1) {
-		log_message("Could not dup err fd: %m\n");
-		goto err_dup_err;
-	}
-
-	close(out_fd);
-	close(null_fd);
-
-	return true;
-
-err_dup_err:
-	close(STDOUT_FILENO);
-err_dup_out:
-	close(STDIN_FILENO);
-err_dup_null:
-err_safe_dup_out:
-	close(out_fd);
-err_open_out:
-err_safe_dup_null:
-	close(null_fd);
-err_open_null:
 	return false;
 }
 
@@ -735,6 +812,13 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 			log_message(
 			    "Abnormal termination of safe process [%d] (%s)\n",
 			    p->pid, p->config.process_name);
+
+			if (p->config.type == SAFE_MODE) {
+				/* Ok, SAFE_MODE process is dead. What to do?
+				 * Probably, kill pid 1 itself so system halts,
+				 * and an external watchdog can jump in.
+				 * TODO check the above */
+			}
 		}
 
 		/* One shot process terminated decrement counter to start
@@ -934,6 +1018,13 @@ int main(int argc, char *argv[])
 	start_watchdog();
 
 	if (!read_inittab(INITTAB_FILENAME, &inittab_entries)) {
+		result = EXIT_FAILURE;
+		goto end;
+	}
+
+	/* Start a placeholder process to be used if we need to go into safe
+	 * mode*/
+	if (!setup_safe_mode(inittab_entries.safe_mode_entry)) {
 		result = EXIT_FAILURE;
 		goto end;
 	}
