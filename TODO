@@ -7,7 +7,6 @@ FEATURES
   start safe application due to system resources exhaustion.
 - Mount other filesystems than those of system.
 - Properly reap grandchildren process.
-- Enforce <core-id> affinity
 - A proper log system
 
 TESTS

@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -330,7 +331,8 @@ err_open_null:
 	return false;
 }
 
-static void setup_child(const char *command, const char *console)
+static void setup_child(const char *command, const char *console,
+			int32_t core_id)
 {
 	int r;
 	pid_t p;
@@ -346,6 +348,22 @@ static void setup_child(const char *command, const char *console)
 	p = setsid();
 	if (p == -1) {
 		goto end;
+	}
+
+	/* Set CPU affinity if defined on inittab */
+	if (core_id >= 0) {
+		cpu_set_t set;
+
+		CPU_ZERO(&set);
+		CPU_SET(core_id, &set);
+
+		errno = 0;
+		if (sched_setaffinity(0, sizeof(set), &set) == -1) {
+			log_message(
+			    "Could not set CPU affinity for process '%s': %m\n",
+			    command);
+			goto end;
+		}
 	}
 
 	/* Configure terminal for child */
@@ -377,7 +395,8 @@ end:
 }
 
 /* Expects SIGCHLD to be disabled when called */
-static pid_t spawn_exec(const char *command, const char *console)
+static pid_t spawn_exec(const char *command, const char *console,
+			int32_t core_id)
 {
 	pid_t p;
 
@@ -390,7 +409,7 @@ static pid_t spawn_exec(const char *command, const char *console)
 	}
 
 	/* child code, should never return */
-	setup_child(command, console);
+	setup_child(command, console, core_id);
 
 #ifdef COMPILING_COVERAGE
 	__gcov_flush();
@@ -435,8 +454,8 @@ static bool start_processes(struct inittab_entry *list)
 				result = false;
 				break;
 			}
-			p->pid =
-			    spawn_exec(entry->process_name, entry->ctty_path);
+			p->pid = spawn_exec(entry->process_name,
+					    entry->ctty_path, entry->core_id);
 
 			if (p->pid > 0) {
 				/* Stores inittab entry information on process

@@ -1,0 +1,14 @@
+EXPECT=(
+    "START.*sleep_and_process_test - A"
+    "START.*sleep_and_process_test - B"
+    "START.*sleep_and_process_test - C"
+    "START.*sleep_and_process_test - D"
+    "CPU AFFINITY OK.*sleep_and_process_test A"
+    "CPU AFFINITY OK.*sleep_and_process_test B"
+    "CPU AFFINITY OK.*sleep_and_process_test C"
+    "CPU AFFINITY OK.*sleep_and_process_test D"
+    )
+
+NOT_EXPECT=(
+    "CPU AFFINITY FAIL"
+    )

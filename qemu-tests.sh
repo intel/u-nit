@@ -13,9 +13,11 @@ LOG_FILE=qemu-tests.log
 INIT_EXEC=init
 SLEEP_TEST_EXEC=tests/sleep_test
 SLEEP_CRASH_TEST_EXEC=tests/sleep_crash_test
+SLEEP_AND_PROCESS_TEST_EXEC=tests/sleep_and_process_test
 IS_RUNNING_EXEC=tests/is_running
 IS_NOT_RUNNING_EXEC=tests/is_not_running
 INSPECT_MOUNT=tests/inspect-mount
+CHECK_CPU_AFFINITY_EXEC=tests/check_cpu_affinity
 
 ROOT_FS=rootfs.ext2
 GCOV_FS=gcov.ext4
@@ -105,9 +107,11 @@ function setup_environment() {
     sudo cp $INIT_EXEC $QEMUDIR/mnt/usr/sbin/init
     sudo cp $SLEEP_TEST_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $SLEEP_CRASH_TEST_EXEC $QEMUDIR/mnt/usr/bin/
+    sudo cp $SLEEP_AND_PROCESS_TEST_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $IS_NOT_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $INSPECT_MOUNT $QEMUDIR/mnt/usr/bin/
+    sudo cp $CHECK_CPU_AFFINITY_EXEC $QEMUDIR/mnt/usr/bin/
     umount_test_fs
 }
 

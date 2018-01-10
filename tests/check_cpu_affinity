@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [ -z "$1" -o -z "$2" ]; then
+    echo "Missing parameters to test process"
+    echo "Inform grep query for process and expected core"
+    echo "e.g. $0 \"[^]]sleep_test A\" 2"
+fi
+
+CORE=$(ps --no-headers -Ao psr:10,command | grep "$1" | cut -b 10)
+
+if [ -z "$CORE" ]; then
+    echo "CPU AFFINITY FAIL: Could not find process '$1'"
+fi
+
+if [ "$CORE" = "$2" ]; then
+    echo "CPU AFFINITY OK for '$1'"
+else
+    echo "CPU AFFINITY FAIL for '$1', found '$CORE'"
+fi

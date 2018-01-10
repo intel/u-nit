@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS += -std=c99 -Wall -D_DEFAULT_SOURCE
+CFLAGS += -std=c99 -Wall -D_DEFAULT_SOURCE -D_GNU_SOURCE
 LDFLAGS +=
 
 AFL_CC ?= afl-gcc
@@ -37,7 +37,7 @@ GCOV_GCNO = $(SOURCE:.c=.gcno)
 GCOV_GCDA = $(SOURCE:.c=.gcda)
 LCOV_FILES = lcov.info lcov-out
 
-AUX_QEMU_TESTS=tests/sleep_crash_test tests/sleep_test
+AUX_QEMU_TESTS=tests/sleep_crash_test tests/sleep_test tests/sleep_and_process_test
 
 *.o: *.c
 	$(CC) $(CFLAGS) $< -o $@
@@ -75,6 +75,9 @@ tests/sleep_crash_test: tests/sleep_crash_test.c
 	$(CC) $(CFLAGS) $< -o $@
 
 tests/sleep_test: tests/sleep_test.c
+	$(CC) $(CFLAGS) $< -o $@
+
+tests/sleep_and_process_test: tests/sleep_and_process_test.c
 	$(CC) $(CFLAGS) $< -o $@
 
 .PHONY:
