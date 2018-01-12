@@ -1,0 +1,12 @@
+1::<one-shot>::/usr/bin/sleep_test A 1
+
+# Next should kill all init named process. pid 1 won't be affected,
+# but safe mode placeholder process will (it's expected that pid 1 will restart
+# this process)
+2::<one-shot>::/usr/bin/killall -s KILL init
+2::<one-shot>::/usr/bin/sleep_test B 1
+
+# This safe process will crash, we expect safe-mode one to be called
+3::<safe-one-shot>::/usr/bin/sleep_crash_test 1
+
+::<safe-mode>::/usr/bin/safe-mode <proc> <exitcode>

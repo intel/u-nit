@@ -1,0 +1,9 @@
+1::<one-shot>::/usr/bin/sleep_test A 1
+
+# Send random signal to placeholder process, that should be ignored
+2::<one-shot>::/usr/bin/killall -s SIGCONT init
+
+# This safe process will crash, we expect safe-mode one to be called
+3::<safe-one-shot>::/usr/bin/sleep_crash_test 1
+
+::<safe-mode>::/usr/bin/safe-mode <exitcode>

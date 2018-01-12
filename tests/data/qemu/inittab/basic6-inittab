@@ -1,0 +1,6 @@
+1::<one-shot>::/usr/bin/sleep_test A 1
+
+# This safe process will crash, we expect safe-mode one to be called
+3::<safe-one-shot>::/usr/bin/sleep_crash_test 1
+
+::<safe-mode>::/usr/bin/safe-mode <proc>

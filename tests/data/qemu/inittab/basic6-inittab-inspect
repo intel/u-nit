@@ -1,0 +1,14 @@
+EXPECT_IN_ORDER=(
+    "START.*sleep_test - A"
+    "SAFE MODE STARTED.*sleep_crash_test"
+    )
+
+EXPECT=(
+    "Safe mode placeholder process"
+    )
+
+NOT_EXPECT=(
+    "Could not fork safe mode placeholder process"
+    "\[Safe mode placeholder\] Could not execute safe"
+    "\[Safe mode placeholder\] Error waiting for"
+    )

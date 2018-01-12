@@ -1,0 +1,6 @@
+1::<one-shot>::/usr/bin/sleep_test A 1
+# This safe process will crash, we expect safe-mode one to be called
+3::<safe-service>::/usr/bin/sleep_crash_test 1
+
+# But safemode itself simply crashes. We expect kernel to panic
+::<safe-mode>::/usr/bin/sleep_crash_test 1 <exitcode> <proc>

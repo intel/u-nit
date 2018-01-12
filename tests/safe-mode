@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "SAFE MODE STARTED, params '$@'"
+kill -s USR2 1
