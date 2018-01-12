@@ -777,9 +777,11 @@ static enum timeout_result kill_timeout_cb(void)
 		log_message("Sending KILL signal to processes that refused to "
 			    "term in timeout\n");
 		while (p != NULL) {
-			log_message("Sending KILL signal to %d (%s)\n", p->pid,
-				    p->config.process_name);
-			kill(p->pid, SIGKILL);
+			if (p->config.type != SAFE_MODE) {
+				log_message("Sending KILL signal to %d (%s)\n",
+					    p->pid, p->config.process_name);
+				kill(p->pid, SIGKILL);
+			}
 			p = p->next;
 		}
 	}
@@ -792,9 +794,11 @@ static void term_running_process(void)
 {
 	struct process *p = running_processes;
 	while (p != NULL) {
-		log_message("Sending TERM signal to %d (%s)\n", p->pid,
-			    p->config.process_name);
-		kill(p->pid, SIGTERM);
+		if (p->config.type != SAFE_MODE) {
+			log_message("Sending TERM signal to %d (%s)\n", p->pid,
+				    p->config.process_name);
+			kill(p->pid, SIGTERM);
+		}
 		p = p->next;
 	}
 
