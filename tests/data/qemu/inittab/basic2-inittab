@@ -8,7 +8,7 @@
 3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test A"
 3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test B"
 3::<one-shot>::/usr/bin/is_not_running "[^]]sleep_test C"
-4::<safe-one-shot>::/usr/bin/sleep_crash_test I 3
+4::<one-shot>::/usr/bin/sleep_crash_test I 3
 5::<safe-one-shot>::/usr/bin/kill -s USR2 1
 1::<shutdown>::/usr/bin/sleep_test E 1
 1::<shutdown>::/usr/bin/sleep_test F 1

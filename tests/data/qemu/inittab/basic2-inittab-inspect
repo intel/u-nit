@@ -25,7 +25,6 @@ EXPECT=(
     "reaping.*sleep_test G"
     "reaping.*sleep_crash_test I"
     "reaping.*sleep_test J"
-    "Abnormal termination of safe process.*sleep_crash_test I"
     )
 
 NOT_EXPECT=(
