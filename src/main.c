@@ -78,9 +78,22 @@ static int safe_mode_pipe_fd;
 
 static int shutdown_command = RB_AUTOBOOT; /* Is this a sensible default? */
 
+static bool safe_mode_on;
+
 #ifdef COMPILING_COVERAGE
 extern void __gcov_flush(void);
 #endif
+
+__attribute__((noreturn)) static void panic(const char *msg)
+{
+	log_message(msg);
+	log_message("Panicking...");
+#ifdef COMPILING_COVERAGE
+	__gcov_flush();
+	sync();
+#endif
+	_exit(1);
+}
 
 static void remove_process(struct process **list, struct process *p)
 {
@@ -562,6 +575,41 @@ static enum timeout_result one_shot_timeout_cb(void)
 	return TIMEOUT_STOP;
 }
 
+static struct process *find_safe_mode_process(void)
+{
+	struct process *p = running_processes;
+	while (p != NULL) {
+		if (p->config.type == SAFE_MODE) {
+			break;
+		}
+		p = p->next;
+	}
+
+	return p;
+}
+
+static void start_safe_mode(const char *process_name, int signal)
+{
+	bool r;
+	struct process *p;
+
+	p = find_safe_mode_process();
+
+	if (p == NULL) {
+		/* No safe mode process, let's panic the kernel */
+		panic("Safe mode required, but safe mode process "
+		      "placeholder not found!\n");
+	}
+	r = execute_safe_mode(safe_mode_pipe_fd, process_name, signal);
+	if (!r) {
+		panic("Couldn't start safe mode!");
+	}
+	/* This will not return to false once is set.
+	 It is expected that init will exit after. If that's not the
+	 case, this approach must be redefined. */
+	safe_mode_on = true;
+}
+
 static bool start_processes(struct inittab_entry *list)
 {
 	int32_t current_order;
@@ -604,9 +652,15 @@ static bool start_processes(struct inittab_entry *list)
 				running_processes = p;
 			} else {
 				log_message("Could not fork process!\n");
+				if (is_safe_entry(entry)) {
+					/* TODO check if sending -1 makes sense.
+					 * That parameter should be signal (or
+					 * exit code) of crashed process. But
+					 * here, it just failed to fork... */
+					start_safe_mode(entry->process_name,
+							-1);
+				}
 				free(p);
-				/* TODO what to do? if a safe one fails, maybe
-				 * safe state?*/
 			}
 
 			entry = entry->next;
@@ -669,8 +723,11 @@ static void stage_maintenance(void)
 		}
 		break;
 	case STAGE_TERMINATION:
-		/* If all process finished, time to start 'shutdown' ones */
-		if (running_processes == NULL) {
+		/* If all process finished, time to start 'shutdown' ones.
+		 * Note that safe_mode process (safe_mode on or not)
+		 * will not be terminated/killed, unless it run and exited */
+		if ((running_processes == NULL) ||
+		    (running_processes->next == NULL)) {
 			if (inittab_entries.shutdown_list != NULL) {
 				current_stage = STAGE_SHUTDOWN;
 				start_processes(inittab_entries.shutdown_list);
@@ -778,6 +835,14 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 	pid_t pid;
 	struct process *p;
 
+	struct {
+		const char *process_name;
+		int signal;
+	} deceased_safe_process = {};
+
+	bool start_safe_process = false;
+	bool restart_safe_mode_placeholder = false;
+
 	/* Reap processes. Multiple SIGCHLD may have been coalesced into one
 	 * signalfd entry */
 	while (true) {
@@ -788,6 +853,12 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 		if (pid <= 0) {
 			if (errno != 0 && errno != ECHILD) {
 				log_message("Error on waitpid: %m\n");
+				/* A safe mode process may have crashed or exit
+				 * with failure and init doesn't have a way to
+				 * know that if waitpid fails What to do?
+				 * Current approach, panic!*/
+				panic("Won't go anywhere if waitpid() is not "
+				      "working!\n");
 			}
 			break;
 		}
@@ -804,20 +875,35 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 
 		log_message("reaping [%d] (%s)'\n", p->pid,
 			    p->config.process_name);
-		/* TODO check also if a <service-safe> exited or if any safe
-		 * process exited returning != 0 */
-		/* A safe process crash asks for safe_mode */
-		if (is_safe_entry(&p->config) && !WIFEXITED(wstatus)) {
-			/* TODO safe mode */
+		/* A safe process crash - or exitcode != 0 - asks for safe_mode
+		 */
+		if (is_safe_entry(&p->config) &&
+		    (!WIFEXITED(wstatus) || (WEXITSTATUS(wstatus) != 0))) {
 			log_message(
 			    "Abnormal termination of safe process [%d] (%s)\n",
 			    p->pid, p->config.process_name);
 
 			if (p->config.type == SAFE_MODE) {
-				/* Ok, SAFE_MODE process is dead. What to do?
-				 * Probably, kill pid 1 itself so system halts,
-				 * and an external watchdog can jump in.
-				 * TODO check the above */
+				/* Safe mode process is dead. Have we started
+				 * safe mode or is still just the placeholder
+				 * process? If the first, all we can do is
+				 * panic. For the later, we'll just try to
+				 * restart it (outside this loop, so we can
+				 * properly reap all dead children). */
+				if (safe_mode_on) {
+					panic("Safe mode process crashed!\n");
+				}
+
+				restart_safe_mode_placeholder = true;
+			} else {
+				start_safe_process = true;
+
+				deceased_safe_process.process_name =
+				    p->config.process_name;
+				if (WIFSIGNALED(wstatus)) {
+					deceased_safe_process.signal =
+					    WTERMSIG(wstatus);
+				}
 			}
 		}
 
@@ -833,6 +919,17 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 
 		/* Process exited, remove from our running process list */
 		remove_process(&running_processes, p);
+	}
+
+	if (start_safe_process) {
+		start_safe_mode(deceased_safe_process.process_name,
+				deceased_safe_process.signal);
+	}
+
+	if (restart_safe_mode_placeholder &&
+	    !setup_safe_mode(inittab_entries.safe_mode_entry)) {
+		panic("Can't keep normal execution without safe mode "
+		      "placeholder process\n");
 	}
 }
 

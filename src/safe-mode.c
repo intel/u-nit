@@ -81,7 +81,7 @@ void safe_mode_wait(const char *safe_mode_cmd, int pipe_fd)
 	/* TODO real command string must replace inittab placeholders (see
 	 * inittab doc) */
 	if (execle("/bin/sh", "/bin/sh", "-c", safe_mode_cmd, NULL, NULL) < 0) {
-		log_message("[Safe mode placeholder] Could not execute safe "
+		printf("[Safe mode placeholder] Could not execute safe "
 			    "process: %m\n");
 		goto error;
 	}
@@ -98,6 +98,7 @@ bool execute_safe_mode(int pipe_fd, const char *failed_process_cmd, int sig)
 	ssize_t size;
 
 	assert(pipe_fd != 0);
+	assert(failed_process_cmd != NULL);
 
 	strncpy(info.process_name, failed_process_cmd,
 		sizeof(info.process_name) - 1U);
