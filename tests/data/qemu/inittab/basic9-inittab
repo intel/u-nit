@@ -1,0 +1,4 @@
+1::<one-shot>::/usr/bin/show_args_env alfa "beta gama" 'delta "epsilon'
+2::<one-shot>::ENV_A=AaaA ENV_B='Bb bb' ENV_C="C"cc'"CC"' /usr/bin/show_args_env 'epsilon'n
+4::<one-shot>::/usr/bin/kill -s USR2 1
+::<safe-mode>::/usr/bin/true

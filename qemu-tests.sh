@@ -18,6 +18,7 @@ IS_RUNNING_EXEC=tests/is_running
 IS_NOT_RUNNING_EXEC=tests/is_not_running
 INSPECT_MOUNT=tests/inspect-mount
 CHECK_CPU_AFFINITY_EXEC=tests/check_cpu_affinity
+SHOW_ARGS_ENV_EXEC=tests/show_args_env
 
 ROOT_FS=rootfs.ext2
 GCOV_FS=gcov.ext4
@@ -113,6 +114,7 @@ function setup_environment() {
     sudo cp $IS_NOT_RUNNING_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $INSPECT_MOUNT $QEMUDIR/mnt/usr/bin/
     sudo cp $CHECK_CPU_AFFINITY_EXEC $QEMUDIR/mnt/usr/bin/
+    sudo cp $SHOW_ARGS_ENV_EXEC $QEMUDIR/mnt/usr/bin/
     umount_test_fs
 }
 

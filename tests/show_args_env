@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Ensure that process substitution below works
+if [ ! -e "/dev/fd" ]; then
+    ln -s /proc/self/fd /dev/fd
+fi
+
+declare -a ENVVARS
+
+readarray -t ENVVARS < <(env)
+
+for E in "${ENVVARS[@]}"; do
+    echo "ENVVAR: [$E]"
+done
+
+for A in "$@"; do
+    echo "ARG: [$A]"
+done

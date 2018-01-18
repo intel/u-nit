@@ -12,7 +12,7 @@ EXPECT=(
     "START.*sleep_test - E"
     "START.*sleep_test - F"
     "START.*sleep_test - G"
-    "unexisting: No such file or directory"
+    "Could not exec process.*unexisting.* No such file or directory"
     "reaping.*sleep_test A"
     "reaping.*sleep_test B"
     "reaping.*sleep_test C"

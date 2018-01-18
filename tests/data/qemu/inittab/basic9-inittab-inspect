@@ -1,0 +1,11 @@
+EXPECT_IN_ORDER=(
+    "ARG: \[alfa\]"
+    "ARG: \[beta gama\]"
+    "ARG: \[delta .epsilon\]"
+
+    "ENVVAR: \[ENV_A=AaaA\]"
+    "ENVVAR: \[ENV_B=Bb bb\]"
+    "ENVVAR: \[ENV_C=Ccc.CC.\]"
+
+    "ARG: \[epsilonn\]"
+    )
