@@ -22,9 +22,9 @@ void init_lexer(struct lexer_data *lexer, char *buf, size_t size)
 };
 
 enum token_result next_token(struct lexer_data *lexer, char **token, char delim,
-			     bool quoted)
+			     bool quoted, bool remove_quotes)
 {
-	size_t start_pos = lexer->pos;
+	size_t start_pos = lexer->pos, quote_start, quote_end;
 	enum token_result ret;
 	bool quoting = false;
 	char quote = '\0';
@@ -41,11 +41,30 @@ enum token_result next_token(struct lexer_data *lexer, char **token, char delim,
 			    quoted) {
 				quote = lexer->buf[lexer->pos];
 				quoting = true;
+				quote_start = lexer->pos;
 			}
 		} else if (lexer->buf[lexer->pos] == quote) {
 			/* Finished quote */
 			quote = '\0';
 			quoting = false;
+			quote_end = lexer->pos;
+
+			if (remove_quotes) {
+				/* Remove ending quote */
+				memmove(&lexer->buf[quote_end],
+					&lexer->buf[quote_end + 1],
+					lexer->size - quote_end - 1);
+				lexer->size--;
+				/* Remove starting quote */
+				memmove(&lexer->buf[quote_start],
+					&lexer->buf[quote_start + 1],
+					lexer->size - quote_start - 1);
+				lexer->size--;
+
+				/* Adjust lexer current position, after two
+				 * chars were removed from buffer */
+				lexer->pos -= 2;
+			}
 		}
 
 		lexer->pos++;

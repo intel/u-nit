@@ -29,6 +29,6 @@ struct lexer_data {
 void init_lexer(struct lexer_data *lexer, char *buf, size_t size);
 enum next_line_result inittab_next_line(FILE *fp, char buf[]);
 enum token_result next_token(struct lexer_data *lexer, char **token, char delim,
-			     bool quoted);
+			     bool quoted, bool remove_quotes);
 
 #endif

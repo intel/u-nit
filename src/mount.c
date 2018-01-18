@@ -170,7 +170,7 @@ static bool parse_fstab_mnt_options(const char *mnt_options,
 	while (true) {
 		char *opt = NULL;
 
-		tr = next_token(&lexer, &opt, ',', true);
+		tr = next_token(&lexer, &opt, ',', true, false);
 		if (tr == TOKEN_END) {
 			/* Ok, no more tokens */
 			break;

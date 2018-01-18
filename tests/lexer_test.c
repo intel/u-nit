@@ -15,6 +15,7 @@ struct test_data {
     const char *str;
     const char delim;
     bool quoted;
+    bool remove_quotes;
     struct {
         const char* token;
         const enum token_result result;
@@ -27,6 +28,7 @@ static struct test_data test1 =
     .str = "The quick brown fox jumps over the lazy dog",
     .delim = ' ',
     .quoted = false,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -77,6 +79,7 @@ static struct test_data test2 =
     .str = "The quick brown fox jumps over the lazy dog",
     .delim = ' ',
     .quoted = true,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -127,6 +130,7 @@ static struct test_data test3 =
     .str = "The,quick,,brown,",
     .delim = ',',
     .quoted = false,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -161,6 +165,7 @@ static struct test_data test4 =
     .str = "The,quick,,brown,",
     .delim = ',',
     .quoted = true,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -195,6 +200,7 @@ static struct test_data test5 =
     .str = "The,quick\",,\"brown,fox,\"\"jumps,\"over,the\"",
     .delim = ',',
     .quoted = false,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -241,6 +247,7 @@ static struct test_data test6 =
     .str = "The,quick\",,\"brown,fox,\"\"jumps,\"over,the\"",
     .delim = ',',
     .quoted = true,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -275,6 +282,7 @@ static struct test_data test7 =
     .str = "",
     .delim = ',',
     .quoted = false,
+    .remove_quotes = false,
     .expected = {
         {
             .token = NULL,
@@ -293,6 +301,7 @@ static struct test_data test8 =
     .str = "",
     .delim = ',',
     .quoted = true,
+    .remove_quotes = false,
     .expected = {
         {
             .token = NULL,
@@ -311,6 +320,7 @@ static struct test_data test9 =
     .str = "The,\"quick,brown",
     .delim = ',',
     .quoted = true,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "The",
@@ -333,9 +343,115 @@ static struct test_data test10 =
     .str = "\"",
     .delim = ',',
     .quoted = true,
+    .remove_quotes = false,
     .expected = {
         {
             .token = "\"",
+            .result = TOKEN_UNFINISHED_QUOTE
+        },
+        {
+            .token = NULL,
+            .result = TOKEN_END
+        },
+    }
+};
+
+static struct test_data test11 =
+{
+    .name = "test11",
+    .str = "The,quick\",,\"brown,fox,\"\"jumps,\"over,the\"",
+    .delim = ',',
+    .quoted = true,
+    .remove_quotes = true,
+    .expected = {
+        {
+            .token = "The",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "quick,,brown",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "fox",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "jumps",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "over,the",
+            .result = TOKEN_OK
+        },
+        {
+            .token = NULL,
+            .result = TOKEN_END
+        },
+    }
+};
+
+static struct test_data test12 =
+{
+    .name = "test12",
+    .str = "The,'quick\",,\"brown',fox,\"\"jumps,\"over,the\"",
+    .delim = ',',
+    .quoted = true,
+    .remove_quotes = true,
+    .expected = {
+        {
+            .token = "The",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "quick\",,\"brown",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "fox",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "jumps",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "over,the",
+            .result = TOKEN_OK
+        },
+        {
+            .token = NULL,
+            .result = TOKEN_END
+        },
+    }
+};
+
+static struct test_data test13 =
+{
+    .name = "test13",
+    .str = "The,\"quick',,'brown\",fox,jumps','over\",\"the,lazy\"",
+    .delim = ',',
+    .quoted = true,
+    .remove_quotes = true,
+    .expected = {
+        {
+            .token = "The",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "quick',,'brown",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "fox",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "jumps,over,the",
+            .result = TOKEN_OK
+        },
+        {
+            .token = "lazy\"",
             .result = TOKEN_UNFINISHED_QUOTE
         },
         {
@@ -363,7 +479,7 @@ static bool perform_test(struct test_data *td)
         enum token_result tr;
         char *token;
 
-        tr = next_token(&lexer, &token, td->delim, td->quoted);
+        tr = next_token(&lexer, &token, td->delim, td->quoted, td->remove_quotes);
         if (tr != td->expected[i].result) {
             printf("TEST lexer (%s): Unexpected result for `next_token`: %d for expected token [%s]. Expected result %d\n",
                     td->name, tr, td->expected[i].token, td->expected[i].result);
@@ -400,6 +516,9 @@ int main(void)
     success &= perform_test(&test8);
     success &= perform_test(&test9);
     success &= perform_test(&test10);
+    success &= perform_test(&test11);
+    success &= perform_test(&test12);
+    success &= perform_test(&test13);
 
     if (success) {
         printf("All tests OK\n");

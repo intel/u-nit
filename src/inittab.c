@@ -179,7 +179,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	init_lexer(&lexer, buf, sizeof(buf));
 
 	/* Get <order> */
-	tr = next_token(&lexer, &order_str, ':', false);
+	tr = next_token(&lexer, &order_str, ':', false, false);
 	if (tr == TOKEN_BLANK) {
 		entry->order = -1;
 	} else if (tr == TOKEN_END) {
@@ -200,7 +200,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	}
 
 	/* Get <core_id> */
-	tr = next_token(&lexer, &core_id_str, ':', false);
+	tr = next_token(&lexer, &core_id_str, ':', false, false);
 	if (tr == TOKEN_BLANK) {
 		entry->core_id = -1;
 	} else if (tr == TOKEN_END) {
@@ -223,7 +223,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	}
 
 	/*Get <type> */
-	tr = next_token(&lexer, &type_str, ':', false);
+	tr = next_token(&lexer, &type_str, ':', false, false);
 	if (tr != TOKEN_OK) {
 		log_message("Expected 'type' field on inittab entry\n");
 		result = RESULT_ERROR;
@@ -261,7 +261,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	}
 
 	/* Get <controlling-terminal> */
-	tr = next_token(&lexer, &ctty_path_str, ':', false);
+	tr = next_token(&lexer, &ctty_path_str, ':', false, false);
 	if ((tr == TOKEN_OK) &&
 	    strlen(ctty_path_str) < sizeof(entry->ctty_path)) {
 		(void)strcpy(entry->ctty_path, ctty_path_str);
@@ -275,7 +275,7 @@ inittab_parse_entry(FILE *fp, struct inittab_entry *entry)
 	}
 
 	/*Get <process> */
-	tr = next_token(&lexer, &process_str, '\0', false);
+	tr = next_token(&lexer, &process_str, '\0', false, false);
 	if (tr != TOKEN_OK) {
 		log_message("Expected 'process' field on inittab entry\n");
 		result = RESULT_ERROR;
