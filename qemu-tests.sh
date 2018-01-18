@@ -39,7 +39,7 @@ DO_SETUP=false
 
 ASAN_EXIT_ERROR=129
 
-DEFAULT_KERNEL_CMDLINE="root=/dev/sda rw console=ttyS0 iip=dhcp"
+DEFAULT_KERNEL_CMDLINE="root=/dev/sda rw console=ttyS0 iip=dhcp panic=-1"
 DEFAULT_FAULT_INJECTION_REPEATS=5
 
 LIBFIU_PRELOAD="LD_PRELOAD=\"/usr/lib/fiu_run_preload.so /usr/lib/fiu_posix_preload.so\""
@@ -56,6 +56,7 @@ function run_qemu() {
 
     LOG_QEMU=$(timeout -s TERM --foreground ${EXEC_TIMEOUT}  \
         qemu-system-x86_64 -machine q35,kernel_irqchip=split -m 512M -enable-kvm \
+          -no-reboot \
           -smp 4 -device intel-iommu,intremap=on,x-buggy-eim=on \
           -s -kernel $QEMUDIR/bzImage  \
           -cpu kvm64,-kvm_pv_eoi,-kvm_steal_time,-kvm_asyncpf,-kvmclock,+vmx \
@@ -144,7 +145,7 @@ function inspect() {
     if [ -z "${INITTAB##$TESTDIR/qemu/*/fail-*}" -o -z "${FSTAB##$TESTDIR/qemu/*/fail-*}" ]; then
         KERNEL_PANIC=$(echo "$LOG_QEMU" | grep "Kernel panic")
         echo "$KERNEL_PANIC" | grep "$KERNEL_PANIC_OK" &> /dev/null
-        if [ $QEMU_EXITCODE -ne 124 -o $? -ne 0 ]; then
+        if [ $QEMU_EXITCODE -ne 0 -o $? -ne 0 ]; then
             RESULT=1
             log_message "QEMU_EXITCODE $QEMU_EXITCODE"
             log_message "Unexpected exit code for failure test. QEMU output copied below:"
