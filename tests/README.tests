@@ -3,11 +3,11 @@ fuzzy or qemu testing.
 
 Unit test
 
-For inittab parser and generic lexer at this moment.
+For inittab, fstab and command line parser, as well as generic lexer.
 
 To generate unit test executable, run `make tests`. It should generate
-`inittab_test`, `lexer_test` and `fstab_test` executables - all must run
-with no issues.
+`inittab_test`, `lexer_test`, `fstab_test` and `cmdline_test` executables
+- all must run with no issues.
 
 Fuzzy testing
 
