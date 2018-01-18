@@ -24,6 +24,7 @@ endif
 ALL: init
 
 SOURCE = \
+	src/cmdline.c \
 	src/inittab.c \
 	src/lexer.c \
 	src/log.c \

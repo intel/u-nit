@@ -22,6 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "cmdline.h"
 #include "inittab.h"
 #include "log.h"
 #include "mainloop.h"
@@ -113,16 +114,17 @@ static void free_process_list(struct process **list)
 	}
 }
 
-static void run_exec(const char *command)
+static void run_exec(struct cmdline_contents *cmd_contents)
 {
 #ifdef COMPILING_COVERAGE
 	__gcov_flush();
 	sync();
 #endif
-	/* should run the new process using a bash ? */
 	errno = 0;
-	if (execle("/bin/sh", "/bin/sh", "-c", command, NULL, NULL) < 0) {
-		log_message("Could not exec process: %m\n");
+	if (execvpe(cmd_contents->args[0], (char *const *)cmd_contents->args,
+		    (char *const *)cmd_contents->env) < 0) {
+		fprintf(stderr, "Could not exec process '%s': %m\n",
+			cmd_contents->args[0]);
 	}
 }
 
@@ -337,12 +339,19 @@ static void setup_child(const char *command, const char *console,
 	int r;
 	pid_t p;
 	sigset_t mask;
+	struct cmdline_contents cmd_contents = {};
 
 	r = sigemptyset(&mask);
 	assert(r == 0);
 
 	r = sigprocmask(SIG_SETMASK, &mask, NULL);
 	assert(r == 0);
+
+	/* TODO check if this can be here (child process) or should be done on
+	 * pid 1 */
+	if (!parse_cmdline(command, &cmd_contents)) {
+		goto end;
+	}
 
 	/* Become a session leader */
 	p = setsid();
@@ -388,9 +397,10 @@ static void setup_child(const char *command, const char *console,
 		}
 	}
 
-	run_exec(command);
+	run_exec(&cmd_contents);
 
 end:
+	free_cmdline_contents(&cmd_contents);
 	return;
 }
 
