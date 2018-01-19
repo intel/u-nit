@@ -465,6 +465,8 @@ static bool start_processes(struct inittab_entry *list)
 
 				if (is_one_shot_entry(&p->config)) {
 					remaining.pending_finish++;
+					log_message("Pending increased to %d\n",
+						    remaining.pending_finish);
 					has_one_shot = true;
 				}
 
@@ -684,8 +686,9 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 
 		/* One shot process terminated decrement counter to start
 		 * remaining_processes*/
-		if (is_one_shot_entry(&p->config)) {
-			// TODO account only for child termination
+		if (is_one_shot_entry(&p->config) &&
+		    ((current_stage == STAGE_STARTUP) ||
+		     (current_stage == STAGE_SHUTDOWN))) {
 			remaining.pending_finish--;
 			log_message("Pending decreased to %d\n",
 				    remaining.pending_finish);

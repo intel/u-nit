@@ -30,4 +30,5 @@ EXPECT=(
 
 NOT_EXPECT=(
     "Abnormal termination of safe process.*sleep_test J"
+    "Pending decreased to -"
     )

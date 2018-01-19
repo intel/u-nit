@@ -20,3 +20,7 @@ EXPECT=(
     "reaping.*sleep_test F"
     "reaping.*sleep_test G"
     )
+
+NOT_EXPECT=(
+    "Pending decreased to -"
+    )
