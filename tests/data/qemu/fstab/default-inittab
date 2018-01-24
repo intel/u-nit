@@ -1,3 +1,3 @@
 1::<one-shot>::/usr/bin/inspect-mount
-2::<one-shot>::/usr/bin/kill -s USR2 1
-1::<safe-mode>::/usr/bin/true
+2::<safe-one-shot>::/usr/bin/kill -s USR2 1
+1::<safe-mode>::/usr/bin/safe-mode

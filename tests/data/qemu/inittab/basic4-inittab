@@ -11,5 +11,5 @@
 4::<one-shot>::/usr/bin/check_cpu_affinity "[^]]sleep_and_process_test B" 2
 4::<one-shot>::/usr/bin/check_cpu_affinity "[^]]sleep_and_process_test C" 3
 4::<one-shot>::/usr/bin/check_cpu_affinity "[^]]sleep_and_process_test D" 3
-5::<one-shot>::/usr/bin/kill -s USR2 1
-2::<safe-mode>::/usr/bin/true
+5::<safe-one-shot>::/usr/bin/kill -s USR2 1
+2::<safe-mode>::/usr/bin/safe-mode
