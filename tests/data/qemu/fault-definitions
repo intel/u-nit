@@ -1,15 +1,27 @@
 FAULTS=(
     "enable_random name=posix/misc/dup2,probability=0.2
+enable_random name=posix/misc/chdir,probability=0.2
 enable_random name=linux/epoll/timerfd_create,probability=0.2"
     "enable_random name=linux/epoll/signalfd,probability=0.2"
-    "enable_random name=posix/io/oc/open,probability=0.2"
+    "enable_random name=posix/io/oc/open,probability=0.2
+enable_random name=posix/io/oc/fopen,probability=0.2
+enable_random name=posix/io/dir/mkdir,probability=0.2
+enable_random name=posix/io/rw/read,probability=0.2
+enable_random name=posix/io/rw/fputc,probability=0.2"
     "enable name=linux/misc/reboot"
     "enable_random name=linux/epoll/epoll_ctl,probability=0.2
 enable_random name=linux/epoll/epoll_wait,probability=0.2
 enable_random name=linux/epoll/epoll_create1,probability=0.2"
     "enable_random name=linux/fs/mount,probability=0.2"
+    "enable_random name=linux/fs/umount,probability=0.2"
     "enable_random name=libc/mm/calloc,probability=0.2"
+    "enable_random name=libc/mm/mmap,probability=0.2"
+    "enable_random name=libc/str/strdup,probability=0.2"
     "enable_random name=posix/proc/fork,probability=0.2
 enable_random name=posix/proc/kill,probability=0.2
+enable_random name=posix/proc/execvpe,probability=0.2
 enable_random name=posix/proc/waitpid,probability=0.2"
+    "enable_random name=posix/term/tcgetattr,probability=0.2
+enable_random name=posix/term/tcsetattr,probability=0.2
+enable_random name=posix/term/tcflush,probability=0.2"
 )
