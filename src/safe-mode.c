@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -19,6 +20,58 @@ struct shared_info {
 	int signal;
 };
 
+#ifdef COMPILING_COVERAGE
+extern void __gcov_flush(void);
+#endif
+
+/* TODO change this when we start parsing cmd line for exec (opposed to using
+ * bash) */
+/* This approach has some limitations. If `process_name` contains spaces or
+ * quotes, they'll be sent as is to safe process - it's up to it to make meaning
+ * of this. However, if we parse cmdline ourselves, we could send all of
+ * `process_name` into a single argument to safe process */
+/* This code runs on child process */
+static char *craft_final_cmd(const char *safe_mode_cmd,
+			     const char *process_name, int sig)
+{
+	char *s, *tmp = NULL;
+
+	tmp = strdup(safe_mode_cmd);
+	if (tmp == NULL) {
+		s = NULL;
+		goto end;
+	}
+
+	/* Replace <proc> with %s */
+	s = strstr(tmp, "<proc>");
+	if (s != NULL) {
+		s[0] = '%';
+		s[1] = '1';
+		s[2] = '$';
+		s[3] = 's';
+		memmove(s + 4U, s + 6U, strlen(s) - 2U);
+	}
+
+	/* Replace <exitcode> with %d */
+	s = strstr(tmp, "<exitcode>");
+	if (s != NULL) {
+		s[0] = '%';
+		s[1] = '2';
+		s[2] = '$';
+		s[3] = 'd';
+		memmove(s + 4U, s + 10U, strlen(s) - 6U);
+	}
+
+	if (asprintf(&s, tmp, process_name, sig) < 0) {
+		s = NULL;
+	}
+
+end:
+	free(tmp);
+
+	return s;
+}
+
 /* This code runs on child process (hence usage of printf) */
 void safe_mode_wait(const char *safe_mode_cmd, int pipe_fd)
 {
@@ -27,6 +80,7 @@ void safe_mode_wait(const char *safe_mode_cmd, int pipe_fd)
 	size_t read_so_far = 0;
 	sigset_t mask;
 	struct shared_info info = {};
+	char *final_cmd;
 
 	r = sigemptyset(&mask);
 	assert(r == 0);
@@ -64,6 +118,13 @@ void safe_mode_wait(const char *safe_mode_cmd, int pipe_fd)
 		}
 	}
 
+	printf("[Safe mode placeholder] Got process '%s' and signal '%d', "
+	       "executing safe mode application\n",
+	       info.process_name, info.signal);
+
+	final_cmd =
+	    craft_final_cmd(safe_mode_cmd, info.process_name, info.signal);
+
 	/* As pipefd may have been duped before, let's close it here to be sure
 	 */
 	(void)close(pipe_fd);
@@ -72,21 +133,24 @@ void safe_mode_wait(const char *safe_mode_cmd, int pipe_fd)
 	sync();
 #endif
 
-	printf("[Safe mode placeholder] Got process '%s' and signal '%d', "
-	       "executing safe mode application\n",
-	       info.process_name, info.signal);
-
 	errno = 0;
 	/* TODO if we get rid of bash on main.c:run_exec, do the same here */
 	/* TODO real command string must replace inittab placeholders (see
 	 * inittab doc) */
-	if (execle("/bin/sh", "/bin/sh", "-c", safe_mode_cmd, NULL, NULL) < 0) {
+	/* We should start safe mode despite not being able to replace tags. */
+	if (execle("/bin/sh", "/bin/sh", "-c",
+		   final_cmd != NULL ? final_cmd : safe_mode_cmd, NULL,
+		   NULL) < 0) {
 		printf("[Safe mode placeholder] Could not execute safe "
-			    "process: %m\n");
+		       "process: %m\n");
 		goto error;
 	}
 
 error:
+#ifdef COMPILING_COVERAGE
+	__gcov_flush();
+	sync();
+#endif
 	_exit(1);
 }
 
