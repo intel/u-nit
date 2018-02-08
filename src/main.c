@@ -128,6 +128,35 @@ static void run_exec(struct cmdline_contents *cmd_contents)
 	}
 }
 
+/*
+ * This function duplicates fd on a file descriptor whose number
+ * is assured to be bigger than STDERR_FILENO. This is necessary
+ * when init sets children default file descriptors (stdin, stdout,
+ * stderr) to avoid any useful file descriptor (like log_fd()) being
+ * accidentally closed because it had a number <= STDERR_FILENO.
+ */
+static bool safe_dup(int *fd)
+{
+	bool result = true;
+	int tmpfd;
+
+	errno = 0;
+	if (*fd <= STDERR_FILENO) {
+		tmpfd = fcntl(*fd, F_DUPFD, STDERR_FILENO + 1);
+
+		if (tmpfd < 0) {
+			log_message("Couldn't safe dup file descriptor\n");
+			result = false;
+			goto end;
+		}
+		(void)close(*fd);
+		*fd = tmpfd;
+	}
+
+end:
+	return result;
+}
+
 static void setup_signals(sigset_t *mask)
 {
 	int i, r;
@@ -246,6 +275,10 @@ static bool setup_stty(const char *terminal)
 		goto err_open;
 	}
 
+	if (!safe_dup(&tty)) {
+		goto err_dup_in;
+	}
+
 	r = dup2(tty, STDIN_FILENO);
 	if (r == -1) {
 		log_message("Could not dup terminal for STDIN: %m\n");
@@ -295,15 +328,23 @@ static bool setup_stdio(void)
 		goto err_open_null;
 	}
 
-	if (dup2(null_fd, STDIN_FILENO) == -1) {
-		log_message("Could not dup null fd: %m\n");
-		goto err_dup_null;
+	if (!safe_dup(&null_fd)) {
+		goto err_safe_dup_null;
 	}
 
 	out_fd = log_fd();
 	if (out_fd == -1) {
 		log_message("Could not open logfile: %m\n");
 		goto err_open_out;
+	}
+
+	if (!safe_dup(&out_fd)) {
+		goto err_safe_dup_out;
+	}
+
+	if (dup2(null_fd, STDIN_FILENO) == -1) {
+		log_message("Could not dup null fd: %m\n");
+		goto err_dup_null;
 	}
 
 	if (dup2(out_fd, STDOUT_FILENO) == -1) {
@@ -322,12 +363,14 @@ static bool setup_stdio(void)
 	return true;
 
 err_dup_err:
-	close(STDERR_FILENO);
+	close(STDOUT_FILENO);
 err_dup_out:
-	close(out_fd);
-err_open_out:
 	close(STDIN_FILENO);
 err_dup_null:
+err_safe_dup_out:
+	close(out_fd);
+err_open_out:
+err_safe_dup_null:
 	close(null_fd);
 err_open_null:
 	return false;
