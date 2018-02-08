@@ -629,6 +629,7 @@ static bool start_processes(struct inittab_entry *list)
 			 * struct */
 			p = calloc(1, sizeof(struct process));
 			if (p == NULL) {
+				log_message("Could not fork process: %m\n");
 				result = false;
 				break;
 			}
@@ -864,6 +865,8 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 				panic("Won't go anywhere if waitpid() is not "
 				      "working!\n");
 			}
+			log_message("Waitpid result %d - errno %d\n", pid,
+				    errno);
 			break;
 		}
 
