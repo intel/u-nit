@@ -24,10 +24,23 @@ QEMU testing
 Runs init as PID 1 on a virtual environment using qemu. This virtual
 environment needs a kernel image and rootfs. Currently, script that
 perform this testing expects a directory `tests/init-qemu`, with files
-`bzImage` - kernel image, `rootfs.ext2` - the root file system of
-the environment, `gcov.ext4` - where coverage obtained by gcov is
-stored and two empty filesystems, `test-fs.ext4` and `test-fs2.ext4`,
-used on fstab tests.
+for the kernel image, an optional initrd and root file system.
+Those can be generated with help of `prepare-test-image.sh` script. It
+uses `mkosi` [https://github.com/systemd/mkosi] to generate a debian
+image, so a `mkosi` installation capable of generating debian images is
+necessary. After image generation, script will extract kernel and initrd
+files. Their names must be set on `qemu-tests.sh` file, on variables
+KERNEL_FILE and INITRD_FILE respectively.
+
+Besides those basic files, `prepare-test-image.sh` also generate
+some other files necessary for tests:  `gcov.ext4` - where coverage
+obtained by gcov is stored and two empty filesystems, `test-fs.ext4`
+and `test-fs2.ext4`, used on fstab tests.
+
+Note that one can create their own kernel directly, if desired. Just
+change KERNEL_FILE variable on `qemu-tests.sh` so this new kernel is
+used. If INITRD_FILE variable is left empty, no initrd file will
+be used - useful for custom kernels that don't use initrd/initramfs.
 
 Tests run on qemu focus on two aspects: inittab and fstab files.
 Inittab tests for qemu environment are defined using two files:

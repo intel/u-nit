@@ -3,6 +3,9 @@
 # Copyright (C) 2017 Intel Corporation
 # SPDX-License-Identifier: MIT
 
+KERNEL_FILE=vmlinuz-4.14.0-3-amd64
+INITRD_FILE=initrd.img-4.14.0-3-amd64
+
 TESTDIR=tests/data
 QEMUDIR=tests/init-qemu
 SRCDIR=src
@@ -21,7 +24,7 @@ CHECK_CPU_AFFINITY_EXEC=tests/check_cpu_affinity
 SHOW_ARGS_ENV_EXEC=tests/show_args_env
 SAFE_MODE_EXEC=tests/safe-mode
 
-ROOT_FS=rootfs.ext2
+ROOT_FS=rootfs.raw
 GCOV_FS=gcov.ext4
 TEST_FS_1=test-fs.ext4
 TEST_FS_2=test-fs2.ext4
@@ -41,10 +44,10 @@ DO_SETUP=false
 
 ASAN_EXIT_ERROR=129
 
-DEFAULT_KERNEL_CMDLINE="root=/dev/sda rw console=ttyS0 iip=dhcp panic=-1"
+DEFAULT_KERNEL_CMDLINE="root=/dev/sda1 rw console=ttyS0 iip=dhcp panic=-1 init=/usr/sbin/init"
 DEFAULT_FAULT_INJECTION_REPEATS=5
 
-LIBFIU_PRELOAD="LD_PRELOAD=\"/usr/lib/fiu_run_preload.so /usr/lib/fiu_posix_preload.so\""
+LIBFIU_PRELOAD="LD_PRELOAD=\"/usr/lib/fiu/fiu_run_preload.so /usr/lib/fiu/fiu_posix_preload.so\""
 
 KERNEL_PANIC_OK="Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000100"
 
@@ -55,12 +58,17 @@ function log_message() {
 function run_qemu() {
     LOG_INIT=$1
     KERNEL_CMDLINE="$DEFAULT_KERNEL_CMDLINE $2"
+    INITRD_PARAM=""
+
+    if [ -n "$INITRD_FILE" ]; then
+        INITRD_PARAM="-initrd $QEMUDIR/$INITRD_FILE"
+    fi
 
     LOG_QEMU=$(timeout -s TERM --foreground ${EXEC_TIMEOUT}  \
         qemu-system-x86_64 -machine q35,kernel_irqchip=split -m 512M -enable-kvm \
           -no-reboot \
           -smp 4 -device intel-iommu,intremap=on,x-buggy-eim=on \
-          -s -kernel $QEMUDIR/bzImage  \
+          -s -kernel $QEMUDIR/$KERNEL_FILE $INITRD_PARAM \
           -cpu kvm64,-kvm_pv_eoi,-kvm_steal_time,-kvm_asyncpf,-kvmclock,+vmx \
           -hda $QEMUDIR/$ROOT_FS \
           -hdb $QEMUDIR/$GCOV_FS \
@@ -80,7 +88,7 @@ function run_valgrind_container() {
         systemd-nspawn -i $QEMUDIR/$ROOT_FS \
           --bind=${LOG_INIT}:/dev/ttyS1 \
           -q \
-          /usr/bin/valgrind --leak-check=full --show-leak-kinds=all /sbin/init 2>&1)
+          /usr/bin/valgrind --leak-check=full --show-leak-kinds=all /usr/sbin/init 2>&1)
 }
 
 function run_asan_container() {
@@ -90,15 +98,25 @@ function run_asan_container() {
           --bind=${LOG_INIT}:/dev/ttyS1 \
           -q \
           -E ASAN_OPTIONS=replace_str=1,detect_invalid_pointer_pairs=2,intercept_strlen=1,exitcode=${ASAN_EXIT_ERROR},verbosity=2 \
-          /sbin/init 2>&1)
+          /usr/sbin/init 2>&1)
 }
 
 function mount_test_fs() {
+    IMAGE=$1
     if [ ! -d "$QEMUDIR/mnt" ]; then
         mkdir $QEMUDIR/mnt
     fi
 
-    sudo mount $QEMUDIR/$1 $QEMUDIR/mnt/
+    OFFSET_PARAM=
+    case $IMAGE in
+        *.raw)
+
+        OFFSET=$(partx -g -r --nr 1 -o START $QEMUDIR/$1)
+        OFFSET_PARAM="-o loop,offset=$((OFFSET*512))"
+        ;;
+    esac
+
+    sudo mount $OFFSET_PARAM $QEMUDIR/$1 $QEMUDIR/mnt/
 }
 
 function umount_test_fs() {
@@ -107,6 +125,7 @@ function umount_test_fs() {
 
 function setup_environment() {
     mount_test_fs $ROOT_FS
+    sudo rm -f $QEMUDIR/mnt/usr/sbin/init
     sudo cp $INIT_EXEC $QEMUDIR/mnt/usr/sbin/init
     sudo cp $SLEEP_TEST_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $SLEEP_CRASH_TEST_EXEC $QEMUDIR/mnt/usr/bin/
@@ -356,6 +375,7 @@ function inspect_fault_injection() {
 
     log_message "-------------------------------------------------------------"
     log_message "Inspecting fault injection output for $INITTAB and $FSTAB"
+    log_message "Init log: $LOG"
     log_message "Faults: $FAULT"
     log_message "-------------------------------------------------------------"
 
