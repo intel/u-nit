@@ -1,23 +1,29 @@
 FEATURES
 ========
-- Start safe mode application after abnormal termination of a `safe`
-  application (as defined on inittab). init should create a process
-  for it on its own startup and wait for some kind of signal to
-  exec the safe application. This should avoid init being unable to
-  start safe application due to system resources exhaustion.
-- Mount other filesystems than those of system.
-- Properly reap grandchildren process.
-- A proper log system
+- Decide on proper log system instead of current, build-time defined,
+  single file to write it all.
+- On safe-mode.c, change current logic to substitute tags <exitcode> and
+  <proc> to something simpler, since now init has its own cmdline parser.
 
 TESTS
 =====
-- Create - somehow - mocks to aid test error handling. For instance,
-  mock 'open()' so it fails, to see how good is our error handling.
-- Enable init to run on container - that can be inferred using
-  `getenv("container")`. This should allow us to easily test init under
-  valgrind or address sanitizer (they need access to `/proc`, that
-  would be available on a container environment).
 - Increase general coverage of current tests.
+- Check why, on mkosi generated image, there's no watchdog device,
+  despite QEMU being instructed to create it.
+- libfiu is nice, but apparently, there's no way to make fault injection
+  tests deterministic. Right now, tests are run a number of times with
+  some probability of injecting fault. This helps increase coverage,
+  but may not be enough.
+- qemu-tests.sh has too many parameters: evaluate which ones are
+  necessary and remove the others. If any of those is not available
+  on all environments (like `-enable-kvm`), it may be better to
+  parametrise it.
+- It is expected that deemed safe programs are able to nicely handle
+  SIGTERM - i.e., they will catch it and exit with exit code 0 if
+  everything is fine. However, default `/usr/bin/kill` is not like
+  that, so, in slow environments, it may receive SIGTERM from pid 1
+  and exit abruptly. A simple solution is simply write our own program
+  to send signals to pid 1, one that is fine with receiving SIGTERM.
 
 MISRA-C
 =======
