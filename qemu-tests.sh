@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Copyright (C) 2017 Intel Corporation
 # SPDX-License-Identifier: MIT
