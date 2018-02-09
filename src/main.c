@@ -54,7 +54,7 @@ enum stage {
 
 struct process {
 	struct process *next;
-	struct inittab_entry config;
+	const struct inittab_entry *config;
 	pid_t pid;
 };
 
@@ -267,7 +267,7 @@ static bool setup_safe_mode(struct inittab_entry *entry)
 		    "Could not fork safe mode placeholder process: %m\n");
 		goto error_fork;
 	} else if (p->pid > 0) {
-		memcpy(&p->config, entry, sizeof(struct inittab_entry));
+		p->config = entry;
 		p->next = running_processes;
 		running_processes = p;
 
@@ -579,7 +579,7 @@ static struct process *find_safe_mode_process(void)
 {
 	struct process *p = running_processes;
 	while (p != NULL) {
-		if (p->config.type == SAFE_MODE) {
+		if (p->config->type == SAFE_MODE) {
 			break;
 		}
 		p = p->next;
@@ -639,10 +639,9 @@ static bool start_processes(struct inittab_entry *list)
 			if (p->pid > 0) {
 				/* Stores inittab entry information on process
 				 * struct */
-				memcpy(&p->config, entry,
-				       sizeof(struct inittab_entry));
+				p->config = entry;
 
-				if (is_one_shot_entry(&p->config)) {
+				if (is_one_shot_entry(p->config)) {
 					remaining.pending_finish++;
 					log_message("Pending increased to %d\n",
 						    remaining.pending_finish);
@@ -778,9 +777,9 @@ static enum timeout_result kill_timeout_cb(void)
 		log_message("Sending KILL signal to processes that refused to "
 			    "term in timeout\n");
 		while (p != NULL) {
-			if (p->config.type != SAFE_MODE) {
+			if (p->config->type != SAFE_MODE) {
 				log_message("Sending KILL signal to %d (%s)\n",
-					    p->pid, p->config.process_name);
+					    p->pid, p->config->process_name);
 				kill(p->pid, SIGKILL);
 			}
 			p = p->next;
@@ -795,9 +794,9 @@ static void term_running_process(void)
 {
 	struct process *p = running_processes;
 	while (p != NULL) {
-		if (p->config.type != SAFE_MODE) {
+		if (p->config->type != SAFE_MODE) {
 			log_message("Sending TERM signal to %d (%s)\n", p->pid,
-				    p->config.process_name);
+				    p->config->process_name);
 			kill(p->pid, SIGTERM);
 		}
 		p = p->next;
@@ -881,16 +880,16 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 		}
 
 		log_message("reaping [%d] (%s)'\n", p->pid,
-			    p->config.process_name);
+			    p->config->process_name);
 		/* A safe process crash - or exitcode != 0 - asks for safe_mode
 		 */
-		if (is_safe_entry(&p->config) &&
+		if (is_safe_entry(p->config) &&
 		    (!WIFEXITED(wstatus) || (WEXITSTATUS(wstatus) != 0))) {
 			log_message(
 			    "Abnormal termination of safe process [%d] (%s)\n",
-			    p->pid, p->config.process_name);
+			    p->pid, p->config->process_name);
 
-			if (p->config.type == SAFE_MODE) {
+			if (p->config->type == SAFE_MODE) {
 				/* Safe mode process is dead. Have we started
 				 * safe mode or is still just the placeholder
 				 * process? If the first, all we can do is
@@ -906,7 +905,7 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 				start_safe_process = true;
 
 				deceased_safe_process.process_name =
-				    p->config.process_name;
+				    p->config->process_name;
 				if (WIFSIGNALED(wstatus)) {
 					deceased_safe_process.signal =
 					    WTERMSIG(wstatus);
@@ -916,7 +915,7 @@ static void handle_child_exit(struct signalfd_siginfo *info)
 
 		/* One shot process terminated decrement counter to start
 		 * remaining_processes*/
-		if (is_one_shot_entry(&p->config) &&
+		if (is_one_shot_entry(p->config) &&
 		    ((current_stage == STAGE_STARTUP) ||
 		     (current_stage == STAGE_SHUTDOWN))) {
 			remaining.pending_finish--;
