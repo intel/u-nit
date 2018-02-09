@@ -45,7 +45,7 @@ void safe_mode_wait(const char *safe_mode_cmd, int pipe_fd)
 
 	while (true) {
 		errno = 0;
-		size = read(pipe_fd, &info + read_so_far,
+		size = read(pipe_fd, (char *)&info + read_so_far,
 			    sizeof(struct shared_info) - read_so_far);
 
 		if (size < 0) {
@@ -138,7 +138,7 @@ bool execute_safe_mode(int pipe_fd, const char *failed_process_cmd, int sig)
 
 	while (written != sizeof(struct shared_info)) {
 		errno = 0;
-		size = write(pipe_fd, &info + written,
+		size = write(pipe_fd, (char *)&info + written,
 			     sizeof(struct shared_info) - written);
 		if (size < 0) {
 			/* pid1 shouldn't be bothered by signals but those on
