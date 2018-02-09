@@ -1,4 +1,4 @@
-Testing init involves some different approaches, like unit testing and
+Testing u-nit involves some different approaches, like unit testing and
 fuzzy or qemu testing.
 
 Unit test
@@ -21,7 +21,7 @@ See AFL documentation for more details.
 
 QEMU testing
 
-Runs init as PID 1 on a virtual environment using qemu. This virtual
+Runs u-nit as PID 1 on a virtual environment using qemu. This virtual
 environment needs a kernel image and rootfs. Currently, script that
 perform this testing expects a directory `tests/init-qemu`, with files
 for the kernel image, an optional initrd and root file system.
@@ -47,13 +47,13 @@ Inittab tests for qemu environment are defined using two files:
 XXX-inittab and XXX-inspect for each test XXX. These files live in
 `tests/data/qemu/inittab` directory. First file defines an inittab file,
 with all programs tha should be run. Second one defines inspections to
-be done on init log file. In this directory there's also a `default-fstab`
+be done on u-nit log file. In this directory there's also a `default-fstab`
 file to be used on all inittab tests.
 
 The inittab file can use some helper executables to perform its tests.
 One is the `sleep_test`, which receives as command line arguments an
 arbitrary string and a number. The arbitrary string can be used to
-inspect init log file. The number is for how long, in seconds, the
+inspect u-nit log file. The number is for how long, in seconds, the
 program will sleep. After period finishes, program quits. This can help
 test if program B starts only after program A runs.
 
@@ -78,17 +78,17 @@ XXX-fstab and XXX-inspect. Both are sent to virtual environment, former
 will be in `/etc/fstab` and later on `/usr/share/expected_mounts`.
 
 To start shutdown on virtual environment, add a `kill -s USR2 1` on
-inittab file, so init will perform shutdown steps.
+inittab file, so u-nit will perform shutdown steps.
 
-The inittab inspect file runs some regular expressions on init log file.
-Note that log file also contains any output of programs started by init -
+The inittab inspect file runs some regular expressions on u-nit log file.
+Note that log file also contains any output of programs started by u-nit -
 except those that define a controlling terminal. For instance, on start,
 `sleep_test` prints `START: /usr/bin/sleep_test <string> <timeout>`.
 Regular expressions are defined on three bash arrays variables: EXPECT,
 EXPECT_IN_ORDER and NOT_EXPECT. The first searches for each expression
-on the array on init log file, and expect that they appear on log,
+on the array on u-nit log file, and expect that they appear on log,
 in the same order they defined on the array. The second simply expects
-that each expression appears on init log file, and the last doesn't
+that each expression appears on u-nit log file, and the last doesn't
 expect them at all.
 
 The fstab inspect file basically lists expected mountpoints with
@@ -99,7 +99,7 @@ like `/mnt/a:rw,relatime,data=ordered`. Another bash array variable
 available is UNEXPECTED, that checks if no MNTPOINT entry listed is
 actually mounted. For instance, entry `/mnt/b` checks if there's no
 `/mnt/b` mountpoint. Useful to test if `noauto` mount option is respected
-by init.
+by u-nit.
 
 Expected options are not automatically derived from fstab file because
 this would be a rather complex task, as there'snot a 1:1 mapping from
@@ -116,7 +116,7 @@ Coverage information
 
 Coverage information of QEMU tests can also be extracted. GCC gcov
 is used to get this information. First step is to use `make coverage`
-to compile init with coverage instrumentation enabled.
+to compile u-nit with coverage instrumentation enabled.
 
 Then, run tests normally (`make run-qemu-test` or `make run-qemu-fault`,
 for instance).
@@ -132,12 +132,12 @@ a new set of tests, use `make clean-coverage`.
 
 Valgrind testing
 
-Runs init as PID 1 inside container environment under Valgrind.
+Runs u-nit as PID 1 inside container environment under Valgrind.
 Container is used instead of QEMU because it easily makes `/proc`
 available for Valgrind. (On QEMU /proc wouldn't be mounted until
-init mount it.)
+u-nit mount it.)
 
-This tests perform all tests on `tests/data/qemu` directory with init
+This tests perform all tests on `tests/data/qemu` directory with u-nit
 under Valgrind, checking for memory issues. If any is found, this
 check should fail and show Valgrind output on `qemu-tests.log`.
 
@@ -145,7 +145,7 @@ To run these tests, run `make run-valgrind-tests`.
 
 Note that Valgrind doesn't implement `reboot` syscall, so it will
 complain about "syscall 169 not implemented". This should not be an
-issue. Indeed, as `reboot` call fails, init shall exit with exit code
+issue. Indeed, as `reboot` call fails, u-nit shall exit with exit code
 1 (`EXIT_FAILURE`), due to `reboot` call failure. On container
 environment this is not an issue - container will simply exit. This
 even allows some cleanup code to run - currently, on normal execution,
@@ -163,25 +163,25 @@ there's no simple way to setup on container the expected device nodes.
 
 ASAN testing
 
-Runs init as PID 1 inside container environment with AdressSanitizer
+Runs u-nit as PID 1 inside container environment with AdressSanitizer
 enabled [https://github.com/google/sanitizers]. Container is used
 instead of QEMU because it easily makes `/proc` available from ASAN.
-(On QEMU /proc wouldn't be mounted until init mount it.)
+(On QEMU /proc wouldn't be mounted until u-nit mount it.)
 
-This tests perform all tests on `tests/data/qemu` directory with init
+This tests perform all tests on `tests/data/qemu` directory with u-nit
 with ASAN, checking for memory issues. If any is found, this
 check should fail and show ASAN output on `qemu-tests.log`.
 
-To run these tests, first ensure that init is compiled with address
+To run these tests, first ensure that u-nit is compiled with address
 sanitizer support, running `make init-asan`, then, to executed the
 tests, run `make run-asan-tests`.
 
-Note that an abrupt end of init - like calling `reboot` - doesn't give
+Note that an abrupt end of u-nit - like calling `reboot` - doesn't give
 a chance to ASAN output its data. To easily allow that and to keep
-consistency with behaviour when running under Valgrind, init doesn't
+consistency with behaviour when running under Valgrind, u-nit doesn't
 call `reboot` if compiled with address sanitizer. So it will end up
 running all clean up code and exit with exit code 1 (`EXIT_FAILURE`),
-just like when init runs under Valgrind.
+just like when u-nit runs under Valgrind.
 
 This test expect that AddressSanitizer libraires are available on
 target image - rootfs.ext2.
@@ -195,7 +195,7 @@ there's no simple way to setup on container the expected device nodes.
 
 Fault injection
 
-Runs init, injecting faults on some library calls, like `calloc` or
+Runs u-nit, injecting faults on some library calls, like `calloc` or
 `epoll_wait`. Uses libfiu (https://blitiri.com.ar/p/libfiu/) library
 to inject the fails.
 
@@ -217,7 +217,7 @@ Each test is run against all tests defined on `tests/data/qemu`. As
 tests are non deterministic - since they will fail at random, given
 specified probability - each test is run five times. This is so that
 it's possible to inject faults on a function that is used in different
-parts of init (so we don't always fault on the first `calloc`, for
+parts of u-nit (so we don't always fault on the first `calloc`, for
 instance).
 
 To run fault injection tests, simply run `make run-qemu-fault`. Note

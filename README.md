@@ -1,4 +1,4 @@
-# safety-critical init
+# u-nit
 
 init is the program responsible to set up userspace - mount filesystems,
 start services and reap process that die.
@@ -18,7 +18,7 @@ provide, see [TODO](TODO)):
 
 ## Building
 
-init-sc requires glibc >= 2.9 and a Linux environment because it uses
+u-nit requires glibc >= 2.9 and a Linux environment because it uses
 Linux-specific functions. Other than that, a simple `make` should
 build and generate init executable.
 
@@ -36,7 +36,7 @@ all guidelines are being strictly followed right now: it is still being
 evaluated which guidelines will be followed and which will be deviated.
 In this case, a formal deviation process will be followed.
 
-Regarding code-style, init-sc loosely follows Linux kernel
+Regarding code-style, u-nit loosely follows Linux kernel
 guidelines. [clang-format](http://clang.llvm.org/docs/ClangFormat.html)
 is used to enforce code style. Simply run `make format-code` and the code
 will be formatted accordingly.
