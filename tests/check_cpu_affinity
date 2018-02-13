@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Copyright (C) 2017 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 if [ -z "$1" -o -z "$2" ]; then
     echo "Missing parameters to test process"
     echo "Inform grep query for process and expected core"

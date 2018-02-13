@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Copyright (C) 2017 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 # Ensure that process substitution below works
 if [ ! -e "/dev/fd" ]; then
     ln -s /proc/self/fd /dev/fd
