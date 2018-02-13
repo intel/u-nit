@@ -18,12 +18,6 @@ TESTS
   necessary and remove the others. If any of those is not available
   on all environments (like `-enable-kvm`), it may be better to
   parametrise it.
-- It is expected that deemed safe programs are able to nicely handle
-  SIGTERM - i.e., they will catch it and exit with exit code 0 if
-  everything is fine. However, default `/usr/bin/kill` is not like
-  that, so, in slow environments, it may receive SIGTERM from pid 1
-  and exit abruptly. A simple solution is simply write our own program
-  to send signals to pid 1, one that is fine with receiving SIGTERM.
 
 MISRA-C
 =======

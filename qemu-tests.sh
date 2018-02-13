@@ -23,6 +23,7 @@ INSPECT_MOUNT=tests/inspect-mount
 CHECK_CPU_AFFINITY_EXEC=tests/check_cpu_affinity
 SHOW_ARGS_ENV_EXEC=tests/show_args_env
 SAFE_MODE_EXEC=tests/safe-mode
+SAFE_KILL_EXEC=tests/safe-kill
 
 ROOT_FS=rootfs.raw
 GCOV_FS=gcov.ext4
@@ -136,6 +137,7 @@ function setup_environment() {
     sudo cp $CHECK_CPU_AFFINITY_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $SHOW_ARGS_ENV_EXEC $QEMUDIR/mnt/usr/bin/
     sudo cp $SAFE_MODE_EXEC $QEMUDIR/mnt/usr/bin/
+    sudo cp $SAFE_KILL_EXEC $QEMUDIR/mnt/usr/bin/
     umount_test_fs
 }
 

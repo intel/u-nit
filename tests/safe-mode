@@ -1,4 +1,5 @@
 #!/bin/bash
 
+trap "" SIGTERM
 echo "SAFE MODE STARTED, params '$@'"
 kill -s USR2 1
