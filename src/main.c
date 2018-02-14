@@ -280,7 +280,7 @@ static bool setup_safe_mode(struct inittab_entry *entry)
 		/* p->pid == 0, this code runs on child, never returns */
 		free(p); /* Make static analysis happy! */
 
-		/* Dup pipefd[0] to avoid it being accidentaly closed on
+		/* Dup pipefd[0] to avoid it being accidentally closed on
 		 * setup_stdio() due it not being bigger than STDERR_FILENO */
 		if (!safe_dup(&pipefd[0]) || !setup_stdio()) {
 #ifdef COMPILING_COVERAGE
@@ -546,7 +546,7 @@ static pid_t spawn_exec(const char *command, const char *console,
 	p = fork();
 
 	log_message("fork result for '%s': %d\n", command, p);
-	/* the caller is reponsible to check the error */
+	/* the caller is responsible to check the error */
 	if (p != 0) {
 		return p;
 	}
@@ -1036,7 +1036,7 @@ static bool setup_console(void)
 static bool is_inside_container(void)
 {
 	/* This check is valid only if we are PID 1. So, if we are
-	 * to be run on diferent PID, we should rethink this function */
+	 * to be run on different PID, we should rethink this function */
 	if (getenv("container") != NULL) {
 		return true;
 	}
@@ -1099,7 +1099,7 @@ int main(int argc, char *argv[])
 
 	/* Disable sysrq */
 	if (!disable_sysrq()) {
-		log_message("Coud not disable Sysrq keys\n");
+		log_message("Could not disable Sysrq keys\n");
 	}
 
 	/* Prepares mainloop to run */

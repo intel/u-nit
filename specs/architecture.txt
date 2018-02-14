@@ -12,7 +12,7 @@ convey the important architectural decisions made.
 
 1.2. Scope
 
-This document is limited to an explaination of the implemented Init, its
+This document is limited to an explanation of the implemented Init, its
 architectural goals and constraints as well as its assumptions of use and
 functionalities.
 

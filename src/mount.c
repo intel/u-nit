@@ -109,45 +109,45 @@ static bool add_option_flag(char *opt, unsigned long *flags)
 	return result;
 }
 
-static bool add_uknown_option(char **unknow_opts, char *option)
+static bool add_unknown_option(char **unknown_opts, char *option)
 {
 	char *tmp = NULL;
 	bool result = false;
 
-	if (*unknow_opts == NULL) {
+	if (*unknown_opts == NULL) {
 		tmp = strdup(option);
 		result = tmp == NULL ? false : true;
 	} else {
 		/* TODO: check if we could go GNU_SOURCE and use asprintf */
 		/* +2 below: one for `,` and one for `\0` */
-		tmp = calloc(1, strlen(*unknow_opts) + strlen(option) + 2);
+		tmp = calloc(1, strlen(*unknown_opts) + strlen(option) + 2);
 		if (tmp != NULL) {
 			/* sprintf is fine as we know size of final string and
 			 * allocated for that */
-			int r = sprintf(tmp, "%s,%s", *unknow_opts, option);
+			int r = sprintf(tmp, "%s,%s", *unknown_opts, option);
 			result = r < 0 ? false : true;
 		}
 	}
 
 	if (result) {
-		free(*unknow_opts);
-		*unknow_opts = tmp;
+		free(*unknown_opts);
+		*unknown_opts = tmp;
 	}
 
 	return result;
 }
 
 static bool parse_fstab_mnt_options(const char *mnt_options,
-				    unsigned long *flags, char **unknow_opts)
+				    unsigned long *flags, char **unknown_opts)
 {
 	struct lexer_data lexer;
 	enum token_result tr;
 	char *dup_options = NULL;
 
-	assert(unknow_opts);
+	assert(unknown_opts);
 	assert(flags);
 
-	*unknow_opts = NULL;
+	*unknown_opts = NULL;
 
 	*flags = 0;
 
@@ -178,7 +178,7 @@ static bool parse_fstab_mnt_options(const char *mnt_options,
 			if (!add_option_flag(opt, flags)) {
 				/* This option is unknown. Let's add to the ones
 				 * sent to fs */
-				if (!add_uknown_option(unknow_opts, opt)) {
+				if (!add_unknown_option(unknown_opts, opt)) {
 					log_message(
 					    "Could not parse fstab: %m\n");
 					goto err;
@@ -198,10 +198,10 @@ static bool parse_fstab_mnt_options(const char *mnt_options,
 	return true;
 
 err:
-	free(*unknow_opts);
+	free(*unknown_opts);
 	free(dup_options);
 
-	*unknow_opts = NULL;
+	*unknown_opts = NULL;
 
 	return false;
 }
@@ -262,7 +262,7 @@ static bool mount_fstab_filesystems(void)
 {
 	bool result = true;
 	struct mntent *ent;
-	char *unknow_opts = NULL;
+	char *unknown_opts = NULL;
 	FILE *fstab;
 
 	fstab = setmntent("/etc/fstab", "re");
@@ -299,7 +299,7 @@ static bool mount_fstab_filesystems(void)
 		}
 
 		if (!parse_fstab_mnt_options(ent->mnt_opts, &flags,
-					     &unknow_opts)) {
+					     &unknown_opts)) {
 			result = false;
 			goto err;
 		}
@@ -311,8 +311,8 @@ static bool mount_fstab_filesystems(void)
 				log_message("Could not mkdir '%s': %m\n",
 					    ent->mnt_dir);
 				if (nofail) {
-					free(unknow_opts);
-					unknow_opts = NULL;
+					free(unknown_opts);
+					unknown_opts = NULL;
 					continue;
 				}
 
@@ -327,9 +327,9 @@ static bool mount_fstab_filesystems(void)
 			    (ent->mnt_opts[0] != '\0') ? ent->mnt_opts
 						       : "(none)");
 		log_message("Parsed flags: %ld\nRemaining options: '%s'\n",
-			    flags, unknow_opts);
+			    flags, unknown_opts);
 		err = mount(ent->mnt_fsname, ent->mnt_dir, ent->mnt_type, flags,
-			    unknow_opts);
+			    unknown_opts);
 		if (err < 0) {
 			log_message("Could not mount '%s' from '%s' to "
 				    "'%s', options='%s': %m\n",
@@ -340,8 +340,8 @@ static bool mount_fstab_filesystems(void)
 
 			/* TODO check if nofail is ok for every fail reason */
 			if (nofail) {
-				free(unknow_opts);
-				unknow_opts = NULL;
+				free(unknown_opts);
+				unknown_opts = NULL;
 				continue;
 			}
 
@@ -349,12 +349,12 @@ static bool mount_fstab_filesystems(void)
 			goto err;
 		}
 
-		free(unknow_opts);
-		unknow_opts = NULL;
+		free(unknown_opts);
+		unknown_opts = NULL;
 	}
 
 err:
-	free(unknow_opts);
+	free(unknown_opts);
 	(void)endmntent(fstab);
 end:
 	return result;

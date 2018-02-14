@@ -76,7 +76,7 @@ fault, ‘safe-mode’ application will be called with:
 
 Lines starting with # character are considered comment lines, so they
 are ignored. Note that it's not possible to comment a line after its
-end, so that follwing example is not a comment:
+end, so that following example is not a comment:
 
 0::<safe-one-shot>:/usr/bin/stl #Not a comment
 

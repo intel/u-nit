@@ -221,7 +221,7 @@ function inspect() {
             LINE=$(echo "$STR" | cut -d ':' -f 1)
 
             if [ $LINE -le $LAST_LINE ]; then
-                log_message "FAIL: Occurence of '$CHECK' before expected"
+                log_message "FAIL: Occurrence of '$CHECK' before expected"
                 RESULT=1
             fi
             LAST_LINE="$LINE"
@@ -436,7 +436,7 @@ function run_valgrind_test() {
     # FSTAB tests are (currently) not possible on container environment
     # (Couldn't find an easy way to replace qemu -hdX on systemd-nspawn)
     if [ "$INITTAB" == "$TESTDIR/qemu/fstab/default-inittab" ]; then
-        echo "Skiping FSTAB test on container ($FSTAB)"
+        echo "Skipping FSTAB test on container ($FSTAB)"
         return 0
     fi
     echo "Testing inittab $INITTAB and fstab $FSTAB with valgrind"
@@ -460,7 +460,7 @@ function run_asan_test() {
     # FSTAB tests are (currently) not possible on container environment
     # (Couldn't find an easy way to replace qemu -hdX on systemd-nspawn)
     if [ "$INITTAB" == "$TESTDIR/qemu/fstab/default-inittab" ]; then
-        echo "Skiping FSTAB test on container ($FSTAB)"
+        echo "Skipping FSTAB test on container ($FSTAB)"
         return 0
     fi
     echo "Testing inittab $INITTAB and $FSTAB with ASAN"
