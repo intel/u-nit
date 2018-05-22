@@ -1,0 +1,388 @@
+Requirements Specification
+
+................................................................................
+
+Introduction The purpose of this document is to define the requirements
+
+HLD - High Level Definition of the requirement
+LLD - Low Level Definition of the requirement
+
+................................................................................
+251155 - init shall initialize watchdog device (e.g. /dev/watchdog) for
+the platform
+
+[HLD] Watchdog devices can reboot system when the OS/application stop feed
+the timer in an interval specified during initialization. This is a
+fail-safe measurement when SW hangs. the init program shall initialize
+watchdog, so that system shall not reboot in normal operation, but doesn't
+prevent watchdog's action in the SW-hang faults (if watchdog is enabled.)
+
+[LLD] decision to enable/disable watchdog; feeding watchdog implementation
+in init or another daemon. a reasonable timeout value after analysis
+
+Comments
+none
+
+................................................................................
+251170 - init (PID 1) shall not quit in the whole life cycle
+
+[HLD] The first launched process of init (PID 1 in Linux) shall not exit
+in any cases when system or the partitioning cell it runs on is
+operational, so that the critical functions provided by init are always
+available in the whole life cycle
+
+[LLD] The execution control shall be designed and implemented as required
+(Also refer to the requirement of handling crash signals). Other instances
+of init launched after the first may have different life cycles, depending
+on the functional and safety needs
+
+Comments
+none
+
+................................................................................
+251173 - Init shall properly set its own file mode creation mask (umask)
+
+
+[HLD] BEFORE it creates any new directory and files, the init process
+shall explicitly set its file mode creation mask (umask). This is to make
+sure the later steps in init and the child processes it launches receive a
+deterministic umask value that is preferred to a minimum access on newly
+created files and directories for:
+
+    - a better readability of code during implementation of init and other
+    processes it launches
+
+    - Reduce the security concerns
+
+    - minimize unexpected accesses to the created FS objects to reduce the
+    unnecessary functionalities for safety concern
+
+[LLD] To be specifically, 0 (zero) shall be set to umask before any open()
+or mkdir() calls in init
+
+[NOTE] We assume a default ACL (access control bits) of the parent
+directory is not set. ACL can disregard umask in some cases. Or we shall
+have another (sub-)requirement to clear out ACL (?)
+
+Comments
+none
+
+................................................................................
+251162 - Init shall handle shutdown and reboot in its cell
+
+[HLD] The reboot system call to initiate a system-wide shutdown or reboot
+requires superuser permission. The init process as root shall be
+responsible for shutdown and reboot procedures. Other (justified) non-root
+child processes also need to communicate with init to trigger these
+procedures. (Refer to the requirements for IPC and multi-user support)
+
+[LLD] init shall perform clean-up sequence like the below sequence that
+may be altered in implementation stage:
+
+    - Inform child processes to terminate
+
+    - Wait child processes for a specified time
+
+    - Sync file systems (OS can perform sync but we shall do once as an
+        alternative treatment, assuming sync what already synced doesn’t
+        cost shutdown too much)
+
+    - ... other cleaning up
+
+    - Start shutdown in kernel via system call
+
+Comments
+none
+
+................................................................................
+251166 - init shall initialize console
+
+[HLD] OS provides consoles to user space. Init shall set up console(s) for
+the function needs
+
+[LLD] A specified list of parameters of terminal and console should be set
+to the console, like tty properties
+
+Comments
+none
+
+................................................................................
+251169 - init shall check if it is the first process launched in user
+space
+
+
+[HLD] To make sure no intermediate state causing any safety issues, init
+shall be the first process launched in user space since system boots. Init
+assumes OS to guarantee this behavior. (refer to the assumption)
+
+[LLD] Most possibly, this new init is expected to run on a Linux-based
+system, thus init shall do a check of its pid (process ID)  assigned by
+OS. The PID shall be 1 in Linux. Other copies of init launched later may
+have different PIDs. Here the PID 1 exactly means the first init process
+
+Comments
+none
+
+................................................................................
+251175 - Init shall configure Sysrq module to avoid unintended functions
+at run time if Sysrq is available
+
+[HLD] Although Sysrq can be excluded when compiling kernel, init shall
+check if it is available and configure (enable/disable) functions properly
+to ensure no unnecessary functions can be performed, including magic keys
+to reboot system, trigger crash, etc
+
+[LLD] Regardless the kernel configuration, init shall check if the control
+interface in /proc is available and check / change settings properly
+
+Comments
+none
+
+................................................................................
+251172 - init shall handle exit of a child process
+
+[HLD] init shall have a clear policy and implementation to handle the exit
+based on a pre-defined policy for the child process
+
+[LLD] At least we need policies for one-shot applications (STL) and
+daemons like jailhouse
+
+Comments
+none
+
+................................................................................
+251174 - Init shall disable CTRL+ALT+DEL key combination (C-A-D)
+
+[HLD] Rebooting system by pressing the 3 keys is a legacy feature on PC
+platforms. The init shall disable this feature at the earliest stage
+during boot to reduce the chance of unintended reboot that may be caused
+by HW/SW environment
+
+[LLD] init shall disable C-A-D feature vi reboot system call and properly
+implement handler of SIGINT, which is the signal kernel sends to init when
+C-A-D is disabled. Kernel may have a default signal handling as “do
+nothing”, but init shall provide a handler explicitly to avoid any
+ambiguity
+
+[NOTE] This requirement does not cover any other reboot configuration
+knobs provided by Linux kernel
+
+Comments
+none
+
+................................................................................
+251165 - Init shall set up logging facilities for itself and other logger
+programs
+
+[HLD] For the debugging purposes, init shall provide logs to the console
+so that developers can debug the program. For diagnostic purposes, init
+shall support logging to a permanent location that can be available in a
+released product, so that service staff can use the log for fault
+analysis. If it is justified for safety or function needs, init shall
+perform initialization for other logging programs too. (e.g. directories,
+        device nodes, log levels etc.)
+
+[LLD]: initialize kernel logging interface and other resources
+
+Comments
+none
+
+................................................................................
+251167 - init shall support multiple boot modes and boot its cell in a
+request mode per request
+
+[HLD] init shall support multiple boot modes to customize system’s
+behavior at run time for the function and safety needs
+
+[LLD] A list of supported boot modes shall be defined. Beside from the
+normal mode where most functions live in, at least a second mode, “update
+mode” is required to update software stack. Interfaces to the other cells
+and child processes in the same cell of init shall be provided so that
+these client can specify the new boot mode at run time
+
+Comments
+none
+
+................................................................................
+251160 - Init shall create necessary device nodes for other parts in the
+system
+
+[HLD] In a Linux system, several device nodes have to be created from user
+space and shall be created at an early stage during boot. The init, as the
+first process, provides a sounding place from architectural and boot
+sequence perspectives to these device nodes
+
+[LLD] In the next stages of the safety life cycle, developers shall
+identify a list of device nodes to be created in the init AND which
+programs require a specific device node. (e.g. for example, /dev/kmsg,
+        /dev/urandom). The parameters to create each device node shall be
+specified in documents, like path, permission, major and minor number of
+the device, etc
+
+Comments
+none
+
+................................................................................
+251159 - Init shall mount necessary filesystems to meet system's
+functions
+
+
+[HLD] In a Linux system, several file systems are required and shared when
+running other services. The init, as the first process, provides a
+sounding place from architectural and boot sequence perspectives to
+perform the mounting
+
+[LLD] In the next stages of the safety life cycle, developers shall
+identify a list of file systems to be mounted in the init AND which
+programs require a specific file system. (e.g. don't mount debugfs if no
+        any process really needs it.) The parameters of mount of each file
+system shall be specified in documents like FS types, RW/O, times, etc
+
+Comments
+none
+
+................................................................................
+251163 - Init shall provide a IPC mechanism
+
+[HLD] The IPC is for child processes to communicate to the init process
+(PID 1). We expect only critical messages shall be supported in init
+
+[LLD] An explicitly defined message structure and buffer shall be defined,
+    as well as the commands. Note this IPC mechanism is a uni-direction
+    that doesn’t allow child processes to receive messages, for the sake
+    of simplicity. Init can send signals to child processes, however
+
+Comments
+none
+
+................................................................................
+251176 - init shall support multi users
+
+[HLD] Multi-user support is a basic and critical partitioning approach of
+permissions. To reduce the surfaces to the critical services and
+resources, the child processes launched by init shall not be run in root
+identity unless it is justified for safety. As a result, multi-user
+support is required
+
+[LLD] an explicit list of uid and gid should be defined in init and each
+child process shall be mapped to one of the entry of the list
+
+Comments
+none
+
+................................................................................
+251168 - init shall create a new session and become the lead of the
+session
+
+
+[HLD] Refer to the Title
+
+[LLD] setsid() shall be called during initialization
+
+Comments
+none
+
+................................................................................
+251157 - init shall initialize security sub-system
+
+[HLD] init shall initialize security sub-system in kernel if such modules
+are enabled, like selinux. This is a security measurement but also related
+to safety concerns
+
+[LLD] initialization procedure, disable/enabling, policy loading, etc
+
+Comments
+none
+
+................................................................................
+251158 - init shall meet boot-time performance goal
+
+[HLD] init shall finish all its work in a deterministic time that
+satisfies the whole system boot time
+
+[LLD] longest boot-time init to take (system boot-ready state is TBD)
+
+Comments
+none
+
+................................................................................
+251161 - Init shall launch other services
+
+[HLD] It is obviously we need other programs and daemons as a function
+partitioning beyond the scope of the init. The init is responsible to
+launch these services during boot. The launch may happen at run time even
+boot passed, not limited to the initial launch during boot stage
+
+[LLD] In the next stages of the safety life cycle, developer shall specify
+a list of programs (e.g. log daemon and jailhouse daemon) to be launched
+in the init along with the parameters of each program, like environment
+variables, arguments of the launched program and the manner of
+re-launching (one-shot or daemon). The programs to be launched can be
+obtained at run time from a configuration file
+
+Comments
+none
+
+................................................................................
+251171 - init shall explicitly provide handlers of all signals
+
+[HLD] Although it is not required to have handlers for all the supported
+signals in a Linux system, init shall provide handlers for all of signals to:
+
+Fulfill specific functions over the signal mechanism
+
+Have a better clarity of code readability and implementation
+
+Prevent unintended default behaviors
+
+[LLD] specify the behavior and signals
+
+Comments
+
+    Author:     Ederson de Souza
+    Date:       2017-10-25T15:08:49.000-0700
+    Priority:   Medium
+
+    Unresolved What would be 'all signals'?: There's a variety of number
+    of signals, according to different POSIX versions, besides other
+    signals understood by glibc and finally the real time extensions
+    (SIGRTMIN to SIGRTMAX)
+
+    Consider also that any signal to which init didn't register to ask,
+    isn't delivered at all by the kernel - to prevent init casually
+    crashing
+
+    So, this requirement should be modified: either to include all signals
+    to be handled, or to relax it to address only necessary signals
+
+................................................................................
+251177 - Init shall close or redirect opened file descriptors (e.g
+        stdin/out/err)
+
+[HLD] a child process of init can inherit opened file descriptors, so init
+shall bring these descriptors to a minimum access state, in order to
+reduce the unintended functions caused by child processes
+
+[LLD] treatment to file descriptors can be closing them or redirect them
+to null devices. If one or more child process do need a file descriptor
+from init, such need shall be addressed in a requirement to init in the
+requirement document of that child process
+
+Comments
+none
+
+................................................................................
+283064 - init shall inform designed application of a crash of a safe
+application
+
+[HLD] Safe applications crashes should be informed to another proper
+application, so that it can send system to safe state
+
+[LLD] init must have a way to configure a 'safe-mode' application, which
+will be informed (via IPC or started with parameters) if a safe
+application has unexpectedly terminated - as in a crash. This also makes
+it necessary for init to be able to distinguish safe applications from
+ordinary applications
+
+Comments
+none
