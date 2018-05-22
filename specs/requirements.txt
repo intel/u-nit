@@ -386,3 +386,15 @@ ordinary applications
 
 Comments
 none
+
+................................................................................
+551255 - init shall be able to set CPU core affinity to process
+
+[HLD] Process can be set to run on specific cores
+
+[LLD] To avoid process running on non-safe related cores, or that process
+supposed to run on different cores due diversity, init shall allow
+defining process core affinity, so that it always run on specified core
+
+Comments
+none
