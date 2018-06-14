@@ -324,36 +324,20 @@ Comments
 none
 
 ................................................................................
-251171 - init shall explicitly provide handlers of all signals
+251171 - init shall explicitly provide handlers for necessary signals
 
-[HLD] Although it is not required to have handlers for all the supported
-signals in a Linux system, init shall provide handlers for all of signals to:
+[HLD] As on Linux kernel the init system (PID 1) does not receive any
+signals by default, to prevent it from being accidentally terminated,
+init shall provide signal handlers only for the necessary signals.
 
-Fulfill specific functions over the signal mechanism
-
-Have a better clarity of code readability and implementation
-
-Prevent unintended default behaviors
-
-[LLD] specify the behavior and signals
+[LLD] Necessary signals for init to handle are:
+  SIGCHLD - So it can be informed of children process status;
+  SIGTERM - So it can start a system reboot;
+  SIGUSR1 - So it can halt the system;
+  SIGUSR2 - So it can start system shutdown
 
 Comments
-
-    Author:     Ederson de Souza
-    Date:       2017-10-25T15:08:49.000-0700
-    Priority:   Medium
-
-    Unresolved What would be 'all signals'?: There's a variety of number
-    of signals, according to different POSIX versions, besides other
-    signals understood by glibc and finally the real time extensions
-    (SIGRTMIN to SIGRTMAX)
-
-    Consider also that any signal to which init didn't register to ask,
-    isn't delivered at all by the kernel - to prevent init casually
-    crashing
-
-    So, this requirement should be modified: either to include all signals
-    to be handled, or to relax it to address only necessary signals
+none
 
 ................................................................................
 251177 - Init shall close or redirect opened file descriptors (e.g
