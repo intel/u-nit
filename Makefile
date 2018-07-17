@@ -1,6 +1,11 @@
 CC ?= gcc
-CFLAGS += -std=c99 -Wall -D_DEFAULT_SOURCE -D_GNU_SOURCE
-LDFLAGS +=
+
+# Note that flags safety fit must be evaluated on context
+HARDENING_CFLAGS ?= -fstack-protector-strong -fPIE -O2 -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security
+HARDENING_LDFLAGS ?= -z noexecstack -z relro -z now -pie
+
+CFLAGS += -std=c99 -Wall -D_DEFAULT_SOURCE -D_GNU_SOURCE $(HARDENING_CFLAGS)
+LDFLAGS += $(HARDENING_LDFLAGS)
 
 AFL_CC ?= afl-gcc
 
