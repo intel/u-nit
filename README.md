@@ -67,6 +67,10 @@ By making a contribution to this project, I certify that:
     maintained indefinitely and may be redistributed consistent with
     this project or the open source license(s) involved.
 
+## Security issues
+
+Please report any security issues with this code to https://01.org/security
+
 ## Disclaimer
 
 The software may be used to create end products used in safety-critical
